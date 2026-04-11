@@ -1,0 +1,228 @@
+import { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { api } from '../lib/api';
+import type { PlayerProfile as PlayerProfileType } from '../types';
+
+export default function PlayerProfile() {
+  const { id } = useParams<{ id: string }>();
+  const [player, setPlayer] = useState<PlayerProfileType | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id) return;
+    api.players
+      .get(Number(id))
+      .then(setPlayer)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  if (loading)
+    return (
+      <div className="text-center text-slate-500 py-12">Loading...</div>
+    );
+  if (!player)
+    return (
+      <div className="text-center text-slate-500 py-12">Player not found.</div>
+    );
+
+  const winRate =
+    player.wins + player.losses > 0
+      ? Math.round((player.wins / (player.wins + player.losses)) * 100)
+      : 0;
+
+  const opponentMap = new Map<number, string>();
+  player.headToHead.forEach((h) => {
+    opponentMap.set(h.opponent.id, h.opponent.name);
+  });
+
+  return (
+    <div>
+      <Link
+        to="/"
+        className="text-sm text-slate-500 hover:text-slate-300 mb-4 inline-block"
+      >
+        &larr; Back to leaderboard
+      </Link>
+
+      {/* Header */}
+      <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-2xl font-bold">{player.name}</h1>
+            {player.challengeRank != null && (
+              <span className="text-sm text-slate-400">
+                Ladder Rank #{player.challengeRank}
+              </span>
+            )}
+          </div>
+          <span className="text-3xl font-mono font-bold">{player.elo}</span>
+        </div>
+        <div className="grid grid-cols-4 gap-4 text-center">
+          <div>
+            <div className="text-2xl font-bold">
+              {player.wins + player.losses}
+            </div>
+            <div className="text-xs text-slate-500 uppercase tracking-wider">
+              Played
+            </div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-emerald-400">
+              {player.wins}
+            </div>
+            <div className="text-xs text-slate-500 uppercase tracking-wider">
+              Wins
+            </div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-red-400">
+              {player.losses}
+            </div>
+            <div className="text-xs text-slate-500 uppercase tracking-wider">
+              Losses
+            </div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold">{winRate}%</div>
+            <div className="text-xs text-slate-500 uppercase tracking-wider">
+              Win Rate
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Streak & Form */}
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
+          <h3 className="text-sm text-slate-400 mb-2">Current Streak</h3>
+          {player.streak ? (
+            <span
+              className={`text-2xl font-bold ${player.streak.type === 'W' ? 'text-emerald-400' : 'text-red-400'}`}
+            >
+              {player.streak.count}
+              {player.streak.type}
+            </span>
+          ) : (
+            <span className="text-slate-500">No matches</span>
+          )}
+        </div>
+        <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
+          <h3 className="text-sm text-slate-400 mb-2">Recent Form</h3>
+          <div className="flex gap-1">
+            {player.recentForm.length > 0 ? (
+              player.recentForm.map((result, i) => (
+                <span
+                  key={i}
+                  className={`w-8 h-8 rounded flex items-center justify-center text-sm font-bold ${
+                    result === 'W'
+                      ? 'bg-emerald-500/20 text-emerald-400'
+                      : 'bg-red-500/20 text-red-400'
+                  }`}
+                >
+                  {result}
+                </span>
+              ))
+            ) : (
+              <span className="text-slate-500">No matches</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Head to Head */}
+      {player.headToHead.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold mb-3">Head to Head</h2>
+          <div className="space-y-2">
+            {player.headToHead.map((h2h) => (
+              <Link
+                key={h2h.opponent.id}
+                to={`/players/${h2h.opponent.id}`}
+                className="flex items-center justify-between bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 hover:bg-slate-700 transition-colors"
+              >
+                <span className="font-medium">{h2h.opponent.name}</span>
+                <span className="text-sm">
+                  <span className="text-emerald-400">{h2h.wins}W</span>
+                  <span className="text-slate-600 mx-1">-</span>
+                  <span className="text-red-400">{h2h.losses}L</span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent Matches */}
+      {player.matches.length > 0 && (
+        <div>
+          <h2 className="text-lg font-semibold mb-3">Match History</h2>
+          <div className="space-y-2">
+            {player.matches.slice(0, 20).map((match) => {
+              const won = match.winnerId === player.id;
+              const eloChange = won
+                ? match.winnerEloChange
+                : match.loserEloChange;
+              const opponentId = won ? match.loserId : match.winnerId;
+              const opponentName =
+                opponentMap.get(opponentId) || `Player #${opponentId}`;
+
+              return (
+                <div
+                  key={match.id}
+                  className={`bg-slate-800 border rounded-lg px-4 py-3 ${
+                    won ? 'border-emerald-500/20' : 'border-red-500/20'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                          won
+                            ? 'bg-emerald-500/20 text-emerald-400'
+                            : 'bg-red-500/20 text-red-400'
+                        }`}
+                      >
+                        {won ? 'W' : 'L'}
+                      </span>
+                      <span className="text-sm">
+                        vs{' '}
+                        <Link
+                          to={`/players/${opponentId}`}
+                          className="hover:text-emerald-400 transition-colors"
+                        >
+                          {opponentName}
+                        </Link>
+                      </span>
+                      {match.winnerScore != null &&
+                        match.loserScore != null && (
+                          <span className="text-slate-500 text-sm">
+                            {won
+                              ? `${match.winnerScore}-${match.loserScore}`
+                              : `${match.loserScore}-${match.winnerScore}`}
+                          </span>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {match.isChallenge && (
+                        <span className="text-purple-400 text-xs font-medium px-2 py-0.5 bg-purple-400/10 rounded-full">
+                          CHALLENGE
+                        </span>
+                      )}
+                      <span
+                        className={`text-sm font-mono tabular-nums ${eloChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                      >
+                        {eloChange >= 0 ? '+' : ''}
+                        {eloChange}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
