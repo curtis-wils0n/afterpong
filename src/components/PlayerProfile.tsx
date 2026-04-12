@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
 import { api } from '../lib/api';
 import type { PlayerProfile as PlayerProfileType } from '../types';
 
@@ -35,6 +36,41 @@ export default function PlayerProfile() {
   player.headToHead.forEach((h) => {
     opponentMap.set(h.opponent.id, h.opponent.name);
   });
+
+  // Compute ELO history from matches (oldest to newest)
+  const eloHistory = (() => {
+    if (player.matches.length === 0) return [];
+
+    const chronological = [...player.matches].reverse();
+    let startElo = player.elo;
+    for (const m of player.matches) {
+      const change = m.winnerId === player.id ? m.winnerEloChange : m.loserEloChange;
+      startElo -= change;
+    }
+
+    const points: { label: string; elo: number; opponent: string; date: string }[] = [
+      { label: 'Start', elo: startElo, opponent: '', date: '' },
+    ];
+
+    let currentElo = startElo;
+    for (const m of chronological) {
+      const won = m.winnerId === player.id;
+      const change = won ? m.winnerEloChange : m.loserEloChange;
+      currentElo += change;
+      const opponentId = won ? m.loserId : m.winnerId;
+      points.push({
+        label: `#${points.length}`,
+        elo: currentElo,
+        opponent: opponentMap.get(opponentId) || `Player #${opponentId}`,
+        date: new Date(m.createdAt).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+        }),
+      });
+    }
+
+    return points;
+  })();
 
   return (
     <div>
@@ -91,6 +127,48 @@ export default function PlayerProfile() {
           </div>
         </div>
       </div>
+
+      {/* ELO Chart */}
+      {eloHistory.length > 1 && (
+        <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-6">
+          <h3 className="text-sm text-slate-400 mb-3">ELO History</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={eloHistory}>
+              <XAxis dataKey="label" hide />
+              <YAxis
+                domain={['dataMin - 20', 'dataMax + 20']}
+                tick={{ fill: '#64748b', fontSize: 12 }}
+                width={40}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1e293b',
+                  border: '1px solid #334155',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                }}
+                labelStyle={{ display: 'none' }}
+                formatter={(value) => [`${value}`, 'ELO']}
+                labelFormatter={(_label, payload) => {
+                  const data = payload?.[0]?.payload as { opponent?: string; date?: string } | undefined;
+                  if (!data?.opponent) return '';
+                  return `vs ${data.opponent} · ${data.date}`;
+                }}
+              />
+              <Line
+                type="monotone"
+                dataKey="elo"
+                stroke="#10b981"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, fill: '#10b981' }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* Streak & Form */}
       <div className="grid grid-cols-2 gap-4 mb-6">
