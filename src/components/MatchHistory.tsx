@@ -95,9 +95,11 @@ export default function MatchHistory() {
                     <span className="text-red-400 tabular-nums">
                       {match.loserEloChange}
                     </span>
-                    <span className="text-slate-500 text-xs w-28 text-right">
-                      {formatDate(match.createdAt)}
-                    </span>
+                    {isAdmin && (
+                      <span className="text-slate-500 text-xs w-28 text-right">
+                        {formatDate(match.createdAt)}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
