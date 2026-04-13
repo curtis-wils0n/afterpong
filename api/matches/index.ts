@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { db } from '../../db/index.js';
 import { players, matches } from '../../db/schema.js';
-import { eq, desc, inArray, sql } from 'drizzle-orm';
+import { eq, desc, inArray } from 'drizzle-orm';
 import { calculateEloChange } from '../../lib/elo.js';
 import { requireAuth, requireAdmin } from '../_lib/auth.js';
 
@@ -99,20 +99,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (isChallenge && winner.challengeRank != null && loser.challengeRank != null) {
       const winnerIsLowerRanked = winner.challengeRank > loser.challengeRank;
       if (winnerIsLowerRanked) {
-        const targetRank = loser.challengeRank;
-        const challengerRank = winner.challengeRank;
-
-        // Shift everyone between targetRank and challengerRank-1 down by 1
-        await db.execute(
-          sql`UPDATE players SET challenge_rank = challenge_rank + 1
-              WHERE challenge_rank >= ${targetRank}
-              AND challenge_rank < ${challengerRank}`
-        );
-
-        // Place winner at the target rank
-        await db.update(players)
-          .set({ challengeRank: targetRank })
-          .where(eq(players.id, winner.id));
+        // Simple swap — only the two players exchange ranks
+        await Promise.all([
+          db.update(players)
+            .set({ challengeRank: loser.challengeRank })
+            .where(eq(players.id, winner.id)),
+          db.update(players)
+            .set({ challengeRank: winner.challengeRank })
+            .where(eq(players.id, loser.id)),
+        ]);
       }
     }
 
@@ -159,17 +154,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       latest.loserRankBefore != null &&
       latest.winnerRankBefore > latest.loserRankBefore // lower-ranked player won = swap happened
     ) {
-      // Shift everyone between loserRankBefore+1 and winnerRankBefore back up by -1
-      await db.execute(
-        sql`UPDATE players SET challenge_rank = challenge_rank - 1
-            WHERE challenge_rank > ${latest.loserRankBefore}
-            AND challenge_rank <= ${latest.winnerRankBefore}`
-      );
-
-      // Place winner back at their original rank
-      await db.update(players)
-        .set({ challengeRank: latest.winnerRankBefore })
-        .where(eq(players.id, winner.id));
+      // Simple swap back to original ranks
+      await Promise.all([
+        db.update(players)
+          .set({ challengeRank: latest.winnerRankBefore })
+          .where(eq(players.id, winner.id)),
+        db.update(players)
+          .set({ challengeRank: latest.loserRankBefore })
+          .where(eq(players.id, loser.id)),
+      ]);
     }
 
     // Delete the match
