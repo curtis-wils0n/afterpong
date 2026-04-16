@@ -209,27 +209,50 @@ export default function PlayerProfile() {
       </div>
 
       {/* Head to Head */}
-      {player.headToHead.length > 0 && (
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold mb-3">Head to Head</h2>
-          <div className="space-y-2">
-            {player.headToHead.map((h2h) => (
-              <Link
-                key={h2h.opponent.id}
-                to={`/players/${h2h.opponent.id}`}
-                className="flex items-center justify-between bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 hover:bg-slate-700 transition-colors"
-              >
-                <span className="font-medium">{h2h.opponent.name}</span>
-                <span className="text-sm">
-                  <span className="text-emerald-400">{h2h.wins}W</span>
-                  <span className="text-slate-600 mx-1">-</span>
-                  <span className="text-red-400">{h2h.losses}L</span>
-                </span>
-              </Link>
-            ))}
+      {player.headToHead.length > 0 && (() => {
+        // Find nemesis: opponent with most losses where losses > wins
+        let nemesisId: number | null = null;
+        let maxLosses = 0;
+        for (const h2h of player.headToHead) {
+          if (h2h.losses > h2h.wins && h2h.losses > maxLosses) {
+            maxLosses = h2h.losses;
+            nemesisId = h2h.opponent.id;
+          }
+        }
+
+        return (
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold mb-3">Head to Head</h2>
+            <div className="space-y-2">
+              {player.headToHead.map((h2h) => (
+                <Link
+                  key={h2h.opponent.id}
+                  to={`/players/${h2h.opponent.id}`}
+                  className={`flex items-center justify-between bg-slate-800 border rounded-lg px-4 py-3 hover:bg-slate-700 transition-colors ${
+                    h2h.opponent.id === nemesisId
+                      ? 'border-red-500/30'
+                      : 'border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{h2h.opponent.name}</span>
+                    {h2h.opponent.id === nemesisId && (
+                      <span className="text-red-400 text-xs font-medium px-2 py-0.5 bg-red-400/10 rounded-full">
+                        NEMESIS
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-sm">
+                    <span className="text-emerald-400">{h2h.wins}W</span>
+                    <span className="text-slate-600 mx-1">-</span>
+                    <span className="text-red-400">{h2h.losses}L</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Recent Matches */}
       {player.matches.length > 0 && (
