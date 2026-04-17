@@ -8,6 +8,7 @@ export default function PlayerProfile() {
   const { id } = useParams<{ id: string }>();
   const [player, setPlayer] = useState<PlayerProfileType | null>(null);
   const [loading, setLoading] = useState(true);
+  const [expandedH2H, setExpandedH2H] = useState<number | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -224,31 +225,106 @@ export default function PlayerProfile() {
           <div className="mb-6">
             <h2 className="text-lg font-semibold mb-3">Head to Head</h2>
             <div className="space-y-2">
-              {player.headToHead.map((h2h) => (
-                <Link
-                  key={h2h.opponent.id}
-                  to={`/players/${h2h.opponent.id}`}
-                  className={`flex items-center justify-between bg-slate-800 border rounded-lg px-4 py-3 hover:bg-slate-700 transition-colors ${
-                    h2h.opponent.id === nemesisId
-                      ? 'border-red-500/30'
-                      : 'border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{h2h.opponent.name}</span>
-                    {h2h.opponent.id === nemesisId && (
-                      <span className="text-red-400 text-xs font-medium px-2 py-0.5 bg-red-400/10 rounded-full">
-                        NEMESIS
-                      </span>
+              {player.headToHead.map((h2h) => {
+                const isExpanded = expandedH2H === h2h.opponent.id;
+                const h2hMatches = player.matches.filter(
+                  (m) =>
+                    m.winnerId === h2h.opponent.id ||
+                    m.loserId === h2h.opponent.id,
+                );
+
+                return (
+                  <div key={h2h.opponent.id}>
+                    <div
+                      onClick={() =>
+                        setExpandedH2H(isExpanded ? null : h2h.opponent.id)
+                      }
+                      className={`flex items-center justify-between bg-slate-800 border rounded-lg px-4 py-3 hover:bg-slate-700 transition-colors cursor-pointer ${
+                        h2h.opponent.id === nemesisId
+                          ? 'border-red-500/30'
+                          : 'border-slate-700'
+                      } ${isExpanded ? 'rounded-b-none' : ''}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{h2h.opponent.name}</span>
+                        {h2h.opponent.id === nemesisId && (
+                          <span className="text-red-400 text-xs font-medium px-2 py-0.5 bg-red-400/10 rounded-full">
+                            NEMESIS
+                          </span>
+                        )}
+                        <Link
+                          to={`/players/${h2h.opponent.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-slate-500 hover:text-emerald-400 text-xs transition-colors"
+                        >
+                          View profile
+                        </Link>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">
+                          <span className="text-emerald-400">{h2h.wins}W</span>
+                          <span className="text-slate-600 mx-1">-</span>
+                          <span className="text-red-400">{h2h.losses}L</span>
+                        </span>
+                        <span className="text-slate-500 text-xs">
+                          {isExpanded ? '\u25B2' : '\u25BC'}
+                        </span>
+                      </div>
+                    </div>
+                    {isExpanded && h2hMatches.length > 0 && (
+                      <div className={`bg-slate-800/50 border border-t-0 rounded-b-lg px-4 py-2 space-y-1 ${
+                        h2h.opponent.id === nemesisId
+                          ? 'border-red-500/30'
+                          : 'border-slate-700'
+                      }`}>
+                        {h2hMatches.map((match) => {
+                          const won = match.winnerId === player.id;
+                          const eloChange = won
+                            ? match.winnerEloChange
+                            : match.loserEloChange;
+                          return (
+                            <div
+                              key={match.id}
+                              className="flex items-center justify-between py-1.5"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                                    won
+                                      ? 'bg-emerald-500/20 text-emerald-400'
+                                      : 'bg-red-500/20 text-red-400'
+                                  }`}
+                                >
+                                  {won ? 'W' : 'L'}
+                                </span>
+                                {match.winnerScore != null &&
+                                  match.loserScore != null && (
+                                    <span className="text-slate-500 text-sm">
+                                      {won
+                                        ? `${match.winnerScore}-${match.loserScore}`
+                                        : `${match.loserScore}-${match.winnerScore}`}
+                                    </span>
+                                  )}
+                                {match.isChallenge && (
+                                  <span className="text-purple-400 text-xs font-medium px-1.5 py-0.5 bg-purple-400/10 rounded-full">
+                                    CHALLENGE
+                                  </span>
+                                )}
+                              </div>
+                              <span
+                                className={`text-sm font-mono tabular-nums ${eloChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                              >
+                                {eloChange >= 0 ? '+' : ''}
+                                {eloChange}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
-                  <span className="text-sm">
-                    <span className="text-emerald-400">{h2h.wins}W</span>
-                    <span className="text-slate-600 mx-1">-</span>
-                    <span className="text-red-400">{h2h.losses}L</span>
-                  </span>
-                </Link>
-              ))}
+                );
+              })}
             </div>
           </div>
         );
