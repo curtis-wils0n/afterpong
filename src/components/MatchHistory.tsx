@@ -72,11 +72,19 @@ export default function MatchHistory() {
                     >
                       {match.loser?.name ?? `Player ${match.loserId}`}
                     </Link>
-                    {match.winnerScore != null && match.loserScore != null && (
+                    {match.games && match.games.length > 0 ? (
+                      <span className="text-slate-400 text-sm shrink-0">
+                        {match.winnerScore}-{match.loserScore}
+                        {' '}
+                        <span className="text-slate-500">
+                          ({match.games.map(g => `${g.winnerScore}-${g.loserScore}`).join(', ')})
+                        </span>
+                      </span>
+                    ) : match.winnerScore != null && match.loserScore != null ? (
                       <span className="text-slate-400 text-sm shrink-0">
                         {match.winnerScore}-{match.loserScore}
                       </span>
-                    )}
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-3 text-sm shrink-0 ml-3">
                     {match.isChallenge && (

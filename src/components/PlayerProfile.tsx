@@ -354,14 +354,24 @@ export default function PlayerProfile() {
                                 >
                                   {won ? 'W' : 'L'}
                                 </span>
-                                {match.winnerScore != null &&
-                                  match.loserScore != null && (
+                                {match.games && match.games.length > 0 ? (
+                                  <span className="text-slate-500 text-sm">
+                                    {won
+                                      ? `${match.winnerScore}-${match.loserScore}`
+                                      : `${match.loserScore}-${match.winnerScore}`}
+                                    {' '}
+                                    ({match.games.map(g =>
+                                      won ? `${g.winnerScore}-${g.loserScore}` : `${g.loserScore}-${g.winnerScore}`
+                                    ).join(', ')})
+                                  </span>
+                                ) : match.winnerScore != null &&
+                                  match.loserScore != null ? (
                                     <span className="text-slate-500 text-sm">
                                       {won
                                         ? `${match.winnerScore}-${match.loserScore}`
                                         : `${match.loserScore}-${match.winnerScore}`}
                                     </span>
-                                  )}
+                                  ) : null}
                                 {match.isChallenge && (
                                   <span className="text-purple-400 text-xs font-medium px-1.5 py-0.5 bg-purple-400/10 rounded-full">
                                     CHALLENGE
@@ -427,14 +437,24 @@ export default function PlayerProfile() {
                           {opponentName}
                         </Link>
                       </span>
-                      {match.winnerScore != null &&
-                        match.loserScore != null && (
+                      {match.games && match.games.length > 0 ? (
+                        <span className="text-slate-500 text-sm">
+                          {won
+                            ? `${match.winnerScore}-${match.loserScore}`
+                            : `${match.loserScore}-${match.winnerScore}`}
+                          {' '}
+                          ({match.games.map(g =>
+                            won ? `${g.winnerScore}-${g.loserScore}` : `${g.loserScore}-${g.winnerScore}`
+                          ).join(', ')})
+                        </span>
+                      ) : match.winnerScore != null &&
+                        match.loserScore != null ? (
                           <span className="text-slate-500 text-sm">
                             {won
                               ? `${match.winnerScore}-${match.loserScore}`
                               : `${match.loserScore}-${match.winnerScore}`}
                           </span>
-                        )}
+                        ) : null}
                     </div>
                     <div className="flex items-center gap-2">
                       {match.isChallenge && (

@@ -10,6 +10,11 @@ export interface Player {
   challengeStreak?: number;
 }
 
+export interface GameScore {
+  winnerScore: number;
+  loserScore: number;
+}
+
 export interface Match {
   id: number;
   winnerId: number;
@@ -19,6 +24,7 @@ export interface Match {
   winnerEloChange: number;
   loserEloChange: number;
   isChallenge: boolean;
+  games: GameScore[] | null;
   createdAt: string;
   winner?: Player;
   loser?: Player;

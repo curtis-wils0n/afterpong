@@ -50,6 +50,7 @@ export const api = {
       winnerScore?: number;
       loserScore?: number;
       isChallenge?: boolean;
+      games?: { winnerScore: number; loserScore: number }[];
     }) =>
       fetchJSON<Match>('/matches', {
         method: 'POST',

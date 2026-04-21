@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import type { Player } from '../types';
 
@@ -17,17 +17,44 @@ export default function LogMatchModal({
   onClose,
   onLogged,
 }: Props) {
-  const [winnerId, setWinnerId] = useState<number | ''>(
-    preselectedPlayers ? '' : '',
+  const [player1Id, setPlayer1Id] = useState<number | ''>(
+    preselectedPlayers?.challengerId ?? '',
   );
-  const [loserId, setLoserId] = useState<number | ''>('');
-  const [winnerScore, setWinnerScore] = useState('');
-  const [loserScore, setLoserScore] = useState('');
+  const [player2Id, setPlayer2Id] = useState<number | ''>(
+    preselectedPlayers?.targetId ?? '',
+  );
+  const [gameScores, setGameScores] = useState([
+    { player1Score: '', player2Score: '' },
+  ]);
   const [isChallenge, setIsChallenge] = useState(defaultIsChallenge);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // For challenge matches with preselected players, restrict to those two
+  // Arrow key scoring: left = point for player 1, right = point for player 2
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      if (player1Id === '' || player2Id === '') return;
+
+      e.preventDefault();
+      const field = e.key === 'ArrowLeft' ? 'player1Score' : 'player2Score';
+      setGameScores((prev) => {
+        const updated = [...prev];
+        const lastIdx = updated.length - 1;
+        const current = Number(updated[lastIdx][field]) || 0;
+        updated[lastIdx] = { ...updated[lastIdx], [field]: String(current + 1) };
+        return updated;
+      });
+    },
+    [player1Id, player2Id],
+  );
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
+
   const challengePlayers = preselectedPlayers
     ? players.filter(
         (p) =>
@@ -38,23 +65,72 @@ export default function LogMatchModal({
 
   const availablePlayers = isChallenge ? challengePlayers : players;
 
+  const player1 = players.find((p) => p.id === player1Id);
+  const player2 = players.find((p) => p.id === player2Id);
+
+  // Count games won by each player
+  const filledGames = gameScores.filter(
+    (g) => g.player1Score !== '' && g.player2Score !== '',
+  );
+  const p1Wins = filledGames.filter(
+    (g) => Number(g.player1Score) > Number(g.player2Score),
+  ).length;
+  const p2Wins = filledGames.filter(
+    (g) => Number(g.player2Score) > Number(g.player1Score),
+  ).length;
+
+  const winnerId = p1Wins > p2Wins ? player1Id : p2Wins > p1Wins ? player2Id : null;
+  const loserId = winnerId === player1Id ? player2Id : winnerId === player2Id ? player1Id : null;
+  const winnerName = winnerId ? players.find((p) => p.id === winnerId)?.name : null;
+
+  const canSubmit =
+    player1Id !== '' &&
+    player2Id !== '' &&
+    player1Id !== player2Id &&
+    winnerId !== null &&
+    !submitting;
+
+  const addGame = () => {
+    setGameScores([...gameScores, { player1Score: '', player2Score: '' }]);
+  };
+
+  const removeGame = (index: number) => {
+    setGameScores(gameScores.filter((_, i) => i !== index));
+  };
+
+  const updateGameScore = (
+    index: number,
+    field: 'player1Score' | 'player2Score',
+    value: string,
+  ) => {
+    const updated = [...gameScores];
+    updated[index] = { ...updated[index], [field]: value };
+    setGameScores(updated);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (winnerId === '' || loserId === '') return;
-    if (winnerId === loserId) {
-      setError('Winner and loser must be different');
-      return;
-    }
+    if (!canSubmit || winnerId === null || loserId === null) return;
 
     setSubmitting(true);
     setError('');
     try {
+      // Map game scores from player1/player2 to winner/loser perspective
+      const games = filledGames.map((g) => {
+        const p1 = Number(g.player1Score);
+        const p2 = Number(g.player2Score);
+        if (winnerId === player1Id) {
+          return { winnerScore: p1, loserScore: p2 };
+        } else {
+          return { winnerScore: p2, loserScore: p1 };
+        }
+      });
+
       await api.matches.create({
         winnerId: Number(winnerId),
         loserId: Number(loserId),
-        ...(winnerScore ? { winnerScore: Number(winnerScore) } : {}),
-        ...(loserScore ? { loserScore: Number(loserScore) } : {}),
         isChallenge,
+        games,
       });
       onLogged();
     } catch (err) {
@@ -70,92 +146,206 @@ export default function LogMatchModal({
       onClick={onClose}
     >
       <div
-        className="bg-slate-800 border border-slate-700 rounded-xl p-6 w-full max-w-md"
+        className="bg-slate-800 border border-slate-700 rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-xl font-bold mb-4">Log Match</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm text-slate-400 mb-1">Winner</label>
-            <select
-              value={winnerId}
-              onChange={(e) =>
-                setWinnerId(e.target.value ? Number(e.target.value) : '')
-              }
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
-            >
-              <option value="">Select winner...</option>
-              {availablePlayers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.elo})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm text-slate-400 mb-1">Loser</label>
-            <select
-              value={loserId}
-              onChange={(e) =>
-                setLoserId(e.target.value ? Number(e.target.value) : '')
-              }
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
-            >
-              <option value="">Select loser...</option>
-              {availablePlayers
-                .filter((p) => p.id !== winnerId)
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.elo})
-                  </option>
-                ))}
-            </select>
-          </div>
+          {/* Player Selection */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm text-slate-400 mb-1">
-                Winner Score{' '}
-                <span className="text-slate-600">(optional)</span>
+                Player 1
               </label>
-              <input
-                type="number"
-                min="0"
-                value={winnerScore}
-                onChange={(e) => setWinnerScore(e.target.value)}
+              <select
+                value={player1Id}
+                onChange={(e) =>
+                  setPlayer1Id(e.target.value ? Number(e.target.value) : '')
+                }
                 className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
-                placeholder="21"
-              />
+              >
+                <option value="">Select...</option>
+                {availablePlayers.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm text-slate-400 mb-1">
-                Loser Score{' '}
-                <span className="text-slate-600">(optional)</span>
+                Player 2
               </label>
-              <input
-                type="number"
-                min="0"
-                value={loserScore}
-                onChange={(e) => setLoserScore(e.target.value)}
+              <select
+                value={player2Id}
+                onChange={(e) =>
+                  setPlayer2Id(e.target.value ? Number(e.target.value) : '')
+                }
                 className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
-                placeholder="18"
-              />
+              >
+                <option value="">Select...</option>
+                {availablePlayers
+                  .filter((p) => p.id !== player1Id)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+              </select>
             </div>
           </div>
 
-          {!preselectedPlayers && (
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isChallenge}
-                onChange={(e) => setIsChallenge(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
-              />
-              <span className="text-sm text-slate-300">Challenge match</span>
-            </label>
+          {/* Live Scoreboard */}
+          {player1 && player2 && (
+            <div className="text-center py-2">
+              <div className="flex items-center justify-center gap-3">
+                <span
+                  className={`font-semibold ${p1Wins > p2Wins ? 'text-emerald-400' : 'text-slate-300'}`}
+                >
+                  {player1.name}
+                </span>
+                <span className="text-2xl font-bold font-mono tabular-nums">
+                  <span
+                    className={
+                      p1Wins > p2Wins ? 'text-emerald-400' : 'text-slate-400'
+                    }
+                  >
+                    {p1Wins}
+                  </span>
+                  <span className="text-slate-600 mx-1">-</span>
+                  <span
+                    className={
+                      p2Wins > p1Wins ? 'text-emerald-400' : 'text-slate-400'
+                    }
+                  >
+                    {p2Wins}
+                  </span>
+                </span>
+                <span
+                  className={`font-semibold ${p2Wins > p1Wins ? 'text-emerald-400' : 'text-slate-300'}`}
+                >
+                  {player2.name}
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-1">
+                Tip: press <kbd className="px-1 py-0.5 bg-slate-700 rounded text-slate-400">&larr;</kbd> <kbd className="px-1 py-0.5 bg-slate-700 rounded text-slate-400">&rarr;</kbd> arrow keys to score points
+              </p>
+            </div>
           )}
 
-          {isChallenge && preselectedPlayers && (
-            <div className="text-xs text-purple-400 bg-purple-400/10 rounded-lg px-3 py-2">
+          {/* Game Scores */}
+          {player1 && player2 && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm text-slate-400">Game Scores</label>
+                <button
+                  type="button"
+                  onClick={addGame}
+                  className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded transition-colors"
+                >
+                  + Add game
+                </button>
+              </div>
+              {/* Column headers */}
+              <div className="flex items-center gap-2 mb-1 px-1">
+                <span className="w-6 shrink-0" />
+                <span className="flex-1 text-xs text-slate-500 text-center truncate">
+                  {player1.name}
+                </span>
+                <span className="w-4 shrink-0" />
+                <span className="flex-1 text-xs text-slate-500 text-center truncate">
+                  {player2.name}
+                </span>
+                <span className="w-5 shrink-0" />
+              </div>
+              <div className="space-y-2">
+                {gameScores.map((game, index) => {
+                  const p1 = Number(game.player1Score);
+                  const p2 = Number(game.player2Score);
+                  const gameComplete =
+                    game.player1Score !== '' && game.player2Score !== '';
+                  const p1Won = gameComplete && p1 > p2;
+                  const p2Won = gameComplete && p2 > p1;
+
+                  return (
+                    <div key={index} className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500 w-6 shrink-0">
+                        G{index + 1}
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={game.player1Score}
+                        onChange={(e) =>
+                          updateGameScore(index, 'player1Score', e.target.value)
+                        }
+                        className={`flex-1 bg-slate-700 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-center ${
+                          p1Won
+                            ? 'border-emerald-500/40'
+                            : p2Won
+                              ? 'border-red-500/30'
+                              : 'border-slate-600'
+                        }`}
+                      />
+                      <span className="text-slate-600 text-sm shrink-0">-</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={game.player2Score}
+                        onChange={(e) =>
+                          updateGameScore(index, 'player2Score', e.target.value)
+                        }
+                        className={`flex-1 bg-slate-700 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-center ${
+                          p2Won
+                            ? 'border-emerald-500/40'
+                            : p1Won
+                              ? 'border-red-500/30'
+                              : 'border-slate-600'
+                        }`}
+                      />
+                      {gameScores.length > 1 ? (
+                        <button
+                          type="button"
+                          onClick={() => removeGame(index)}
+                          className="text-slate-500 hover:text-red-400 text-sm w-5 shrink-0 text-center transition-colors"
+                        >
+                          &times;
+                        </button>
+                      ) : (
+                        <span className="w-5 shrink-0" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {!preselectedPlayers ? (
+            <button
+              type="button"
+              onClick={() => setIsChallenge(!isChallenge)}
+              className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                isChallenge
+                  ? 'bg-purple-500/10 border-purple-500/40 text-purple-300'
+                  : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:border-slate-500'
+              }`}
+            >
+              <span>Challenge match</span>
+              <span
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                  isChallenge ? 'bg-purple-500' : 'bg-slate-600'
+                }`}
+              >
+                <span
+                  className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                    isChallenge ? 'translate-x-4' : 'translate-x-1'
+                  }`}
+                />
+              </span>
+            </button>
+          ) : (
+            <div className="text-xs text-purple-400 bg-purple-400/10 border border-purple-500/30 rounded-lg px-3 py-2">
               Challenge match — if the lower-ranked player wins, they take the
               higher rank.
             </div>
@@ -172,10 +362,14 @@ export default function LogMatchModal({
             </button>
             <button
               type="submit"
-              disabled={winnerId === '' || loserId === '' || submitting}
+              disabled={!canSubmit}
               className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
-              {submitting ? 'Logging...' : 'Log Match'}
+              {submitting
+                ? 'Logging...'
+                : winnerName
+                  ? `Log Win for ${winnerName}`
+                  : 'Enter scores...'}
             </button>
           </div>
         </form>

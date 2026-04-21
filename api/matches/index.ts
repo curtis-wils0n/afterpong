@@ -43,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'POST') {
-    const { winnerId, loserId, winnerScore, loserScore, isChallenge } = req.body;
+    const { winnerId, loserId, winnerScore, loserScore, isChallenge, games } = req.body;
 
     if (!winnerId || !loserId) {
       return res.status(400).json({ error: 'Winner and loser are required' });
@@ -74,17 +74,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // Validate games array if provided
+    let validatedGames: { winnerScore: number; loserScore: number }[] | null = null;
+    let seriesWinnerScore: number | null = winnerScore ?? null;
+    let seriesLoserScore: number | null = loserScore ?? null;
+
+    if (Array.isArray(games) && games.length > 0) {
+      for (const g of games) {
+        if (typeof g.winnerScore !== 'number' || typeof g.loserScore !== 'number' ||
+            g.winnerScore < 0 || g.loserScore < 0) {
+          return res.status(400).json({ error: 'Invalid game scores' });
+        }
+      }
+
+      const gamesWonByWinner = games.filter((g: { winnerScore: number; loserScore: number }) => g.winnerScore > g.loserScore).length;
+      const gamesWonByLoser = games.length - gamesWonByWinner;
+
+      if (gamesWonByWinner <= gamesWonByLoser) {
+        return res.status(400).json({ error: 'Winner must have won more games' });
+      }
+
+      validatedGames = games;
+      seriesWinnerScore = gamesWonByWinner;
+      seriesLoserScore = gamesWonByLoser;
+    }
+
     const { winnerChange, loserChange } = calculateEloChange(winner.elo, loser.elo);
 
     // Insert match with pre-match ranks
     const [match] = await db.insert(matches).values({
       winnerId,
       loserId,
-      winnerScore: winnerScore ?? null,
-      loserScore: loserScore ?? null,
+      winnerScore: seriesWinnerScore,
+      loserScore: seriesLoserScore,
       winnerEloChange: winnerChange,
       loserEloChange: loserChange,
       isChallenge: !!isChallenge,
+      games: validatedGames,
       winnerRankBefore: winner.challengeRank,
       loserRankBefore: loser.challengeRank,
     }).returning();

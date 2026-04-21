@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, integer, timestamp, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, serial, varchar, integer, timestamp, boolean, jsonb } from 'drizzle-orm/pg-core';
 
 export const players = pgTable('players', {
   id: serial('id').primaryKey(),
@@ -17,6 +17,7 @@ export const matches = pgTable('matches', {
   winnerEloChange: integer('winner_elo_change').notNull(),
   loserEloChange: integer('loser_elo_change').notNull(),
   isChallenge: boolean('is_challenge').notNull().default(false),
+  games: jsonb('games').$type<{ winnerScore: number; loserScore: number }[]>(),
   winnerRankBefore: integer('winner_rank_before'),
   loserRankBefore: integer('loser_rank_before'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
