@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import Tooltip from './Tooltip';
 import type { StatsResponse, PlayerRef } from '../types';
 
 function PlayerLink({ player }: { player: PlayerRef }) {
@@ -31,16 +32,32 @@ function StatCard({
   label,
   value,
   valueClass,
+  tooltip,
   children,
 }: {
   label: string;
   value?: string;
   valueClass?: string;
+  tooltip?: string;
   children?: React.ReactNode;
 }) {
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
-      <h3 className="text-sm text-slate-400 mb-2">{label}</h3>
+    <div className="relative bg-slate-800 border border-slate-700 rounded-lg p-4">
+      {tooltip && (
+        <span className="absolute top-2 right-2">
+          <Tooltip content={tooltip}>
+            <button
+              type="button"
+              tabIndex={0}
+              aria-label={tooltip}
+              className="w-4 h-4 flex items-center justify-center rounded-full bg-slate-700/50 text-slate-500 hover:text-slate-300 text-[10px] font-bold cursor-help select-none"
+            >
+              ?
+            </button>
+          </Tooltip>
+        </span>
+      )}
+      <h3 className="text-sm text-slate-400 mb-2 pr-6">{label}</h3>
       {value !== undefined && (
         <div
           className={`text-2xl font-bold font-mono tabular-nums ${valueClass ?? ''}`}
@@ -55,13 +72,42 @@ function StatCard({
   );
 }
 
-function NoData({ label }: { label: string }) {
+function NoData({ label, tooltip }: { label: string; tooltip?: string }) {
   return (
-    <StatCard label={label}>
+    <StatCard label={label} tooltip={tooltip}>
       <span className="text-slate-600">No data yet</span>
     </StatCard>
   );
 }
+
+const TIPS = {
+  peakElo: 'Highest ELO anyone has ever reached',
+  biggestClimber:
+    'Largest gap between a player’s lowest ever ELO and their current ELO',
+  biggestFaller:
+    'Largest gap between a player’s peak ELO and their current ELO',
+  currentWinStreak: 'Longest active streak of consecutive wins',
+  longestWinStreak: 'Longest streak of consecutive wins ever recorded',
+  currentLossStreak: 'Longest active streak of consecutive losses',
+  longestLossStreak: 'Longest streak of consecutive losses ever recorded',
+  biggestUpset:
+    'Single match where the winner gained the most ELO from one win',
+  mostUpsetsCaused:
+    'Career count of wins where the player was the underdog (gained more than 20 ELO)',
+  mostSuccessfulClimbs:
+    'Career count of challenge matches won as the lower-ranked challenger',
+  bestDefender:
+    'Career count of challenge matches won as the higher-ranked defender',
+  biggestRivalry: 'Pair of players with the most total matches between them',
+  dominator:
+    'Largest one-sided head-to-head sweep (min 3 games, opponent has 0 wins)',
+  mostFriendly:
+    'Player most often shown as the FRIEND badge on others’ profiles (most games together)',
+  biggestVillain:
+    'Player most often shown as the NEMESIS badge on others’ profiles (drained the most ELO)',
+  biggestOp:
+    'Player most often shown as the RIVAL badge on others’ profiles (closest matchup)',
+};
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', {
@@ -108,11 +154,12 @@ export default function Stats() {
           <StatCard
             label="Peak ELO"
             value={String(stats.players.peakElo.elo)}
+            tooltip={TIPS.peakElo}
           >
             <PlayerLinks players={stats.players.peakElo.players} />
           </StatCard>
         ) : (
-          <NoData label="Peak ELO" />
+          <NoData label="Peak ELO" tooltip={TIPS.peakElo} />
         )}
 
         {stats.players.biggestClimber ? (
@@ -120,6 +167,7 @@ export default function Stats() {
             label="Biggest Climber"
             value={`+${stats.players.biggestClimber.climb}`}
             valueClass="text-emerald-400"
+            tooltip={TIPS.biggestClimber}
           >
             <PlayerLink player={stats.players.biggestClimber.player} />
             <span className="text-slate-600">
@@ -129,7 +177,7 @@ export default function Stats() {
             </span>
           </StatCard>
         ) : (
-          <NoData label="Biggest Climber" />
+          <NoData label="Biggest Climber" tooltip={TIPS.biggestClimber} />
         )}
 
         {stats.players.biggestFaller ? (
@@ -137,6 +185,7 @@ export default function Stats() {
             label="Biggest Faller"
             value={`-${stats.players.biggestFaller.fall}`}
             valueClass="text-red-400"
+            tooltip={TIPS.biggestFaller}
           >
             <PlayerLink player={stats.players.biggestFaller.player} />
             <span className="text-slate-600">
@@ -146,7 +195,7 @@ export default function Stats() {
             </span>
           </StatCard>
         ) : (
-          <NoData label="Biggest Faller" />
+          <NoData label="Biggest Faller" tooltip={TIPS.biggestFaller} />
         )}
       </div>
 
@@ -158,11 +207,15 @@ export default function Stats() {
             label="Current Longest Win Streak"
             value={`${stats.streaks.currentWinStreak.count}W`}
             valueClass="text-emerald-400"
+            tooltip={TIPS.currentWinStreak}
           >
             <PlayerLinks players={stats.streaks.currentWinStreak.players} />
           </StatCard>
         ) : (
-          <NoData label="Current Longest Win Streak" />
+          <NoData
+            label="Current Longest Win Streak"
+            tooltip={TIPS.currentWinStreak}
+          />
         )}
 
         {stats.streaks.longestWinStreak ? (
@@ -170,11 +223,15 @@ export default function Stats() {
             label="All-Time Longest Win Streak"
             value={`${stats.streaks.longestWinStreak.count}W`}
             valueClass="text-emerald-400"
+            tooltip={TIPS.longestWinStreak}
           >
             <PlayerLinks players={stats.streaks.longestWinStreak.players} />
           </StatCard>
         ) : (
-          <NoData label="All-Time Longest Win Streak" />
+          <NoData
+            label="All-Time Longest Win Streak"
+            tooltip={TIPS.longestWinStreak}
+          />
         )}
 
         {stats.streaks.currentLossStreak ? (
@@ -182,11 +239,15 @@ export default function Stats() {
             label="Current Longest Loss Streak"
             value={`${stats.streaks.currentLossStreak.count}L`}
             valueClass="text-red-400"
+            tooltip={TIPS.currentLossStreak}
           >
             <PlayerLinks players={stats.streaks.currentLossStreak.players} />
           </StatCard>
         ) : (
-          <NoData label="Current Longest Loss Streak" />
+          <NoData
+            label="Current Longest Loss Streak"
+            tooltip={TIPS.currentLossStreak}
+          />
         )}
 
         {stats.streaks.longestLossStreak ? (
@@ -194,11 +255,15 @@ export default function Stats() {
             label="All-Time Longest Loss Streak"
             value={`${stats.streaks.longestLossStreak.count}L`}
             valueClass="text-red-400"
+            tooltip={TIPS.longestLossStreak}
           >
             <PlayerLinks players={stats.streaks.longestLossStreak.players} />
           </StatCard>
         ) : (
-          <NoData label="All-Time Longest Loss Streak" />
+          <NoData
+            label="All-Time Longest Loss Streak"
+            tooltip={TIPS.longestLossStreak}
+          />
         )}
       </div>
 
@@ -210,6 +275,7 @@ export default function Stats() {
             label="Biggest Upset"
             value={`+${stats.matches.biggestUpset.eloGain}`}
             valueClass="text-yellow-400"
+            tooltip={TIPS.biggestUpset}
           >
             <PlayerLink player={stats.matches.biggestUpset.winner} />
             <span className="text-slate-600"> beat </span>
@@ -220,7 +286,7 @@ export default function Stats() {
             </span>
           </StatCard>
         ) : (
-          <NoData label="Biggest Upset" />
+          <NoData label="Biggest Upset" tooltip={TIPS.biggestUpset} />
         )}
 
         {stats.matches.mostUpsetsCaused ? (
@@ -228,11 +294,12 @@ export default function Stats() {
             label="Most Upsets Caused"
             value={String(stats.matches.mostUpsetsCaused.count)}
             valueClass="text-yellow-400"
+            tooltip={TIPS.mostUpsetsCaused}
           >
             <PlayerLinks players={stats.matches.mostUpsetsCaused.players} />
           </StatCard>
         ) : (
-          <NoData label="Most Upsets Caused" />
+          <NoData label="Most Upsets Caused" tooltip={TIPS.mostUpsetsCaused} />
         )}
       </div>
 
@@ -244,11 +311,15 @@ export default function Stats() {
             label="Most Successful Climbs"
             value={String(stats.ladder.mostSuccessfulClimbs.count)}
             valueClass="text-emerald-400"
+            tooltip={TIPS.mostSuccessfulClimbs}
           >
             <PlayerLinks players={stats.ladder.mostSuccessfulClimbs.players} />
           </StatCard>
         ) : (
-          <NoData label="Most Successful Climbs" />
+          <NoData
+            label="Most Successful Climbs"
+            tooltip={TIPS.mostSuccessfulClimbs}
+          />
         )}
 
         {stats.ladder.bestDefender ? (
@@ -256,11 +327,12 @@ export default function Stats() {
             label="Best Defender"
             value={String(stats.ladder.bestDefender.count)}
             valueClass="text-sky-400"
+            tooltip={TIPS.bestDefender}
           >
             <PlayerLinks players={stats.ladder.bestDefender.players} />
           </StatCard>
         ) : (
-          <NoData label="Best Defender" />
+          <NoData label="Best Defender" tooltip={TIPS.bestDefender} />
         )}
       </div>
 
@@ -272,13 +344,14 @@ export default function Stats() {
             label="Biggest Rivalry"
             value={`${stats.rivalries.biggestRivalry.matches} matches`}
             valueClass="text-amber-400"
+            tooltip={TIPS.biggestRivalry}
           >
             <PlayerLink player={stats.rivalries.biggestRivalry.p1} />
             <span className="text-slate-600"> vs </span>
             <PlayerLink player={stats.rivalries.biggestRivalry.p2} />
           </StatCard>
         ) : (
-          <NoData label="Biggest Rivalry" />
+          <NoData label="Biggest Rivalry" tooltip={TIPS.biggestRivalry} />
         )}
 
         {stats.rivalries.dominator ? (
@@ -286,13 +359,14 @@ export default function Stats() {
             label="Dominator"
             value={`${stats.rivalries.dominator.wins}-0`}
             valueClass="text-amber-400"
+            tooltip={TIPS.dominator}
           >
             <PlayerLink player={stats.rivalries.dominator.dominator} />
             <span className="text-slate-600"> over </span>
             <PlayerLink player={stats.rivalries.dominator.victim} />
           </StatCard>
         ) : (
-          <NoData label="Dominator" />
+          <NoData label="Dominator" tooltip={TIPS.dominator} />
         )}
       </div>
 
@@ -304,11 +378,12 @@ export default function Stats() {
             label="Most Friendly"
             value={String(stats.relationships.mostFriendly.count)}
             valueClass="text-sky-400"
+            tooltip={TIPS.mostFriendly}
           >
             <PlayerLinks players={stats.relationships.mostFriendly.players} />
           </StatCard>
         ) : (
-          <NoData label="Most Friendly" />
+          <NoData label="Most Friendly" tooltip={TIPS.mostFriendly} />
         )}
 
         {stats.relationships.biggestVillain ? (
@@ -316,13 +391,14 @@ export default function Stats() {
             label="Biggest Villain"
             value={String(stats.relationships.biggestVillain.count)}
             valueClass="text-red-400"
+            tooltip={TIPS.biggestVillain}
           >
             <PlayerLinks
               players={stats.relationships.biggestVillain.players}
             />
           </StatCard>
         ) : (
-          <NoData label="Biggest Villain" />
+          <NoData label="Biggest Villain" tooltip={TIPS.biggestVillain} />
         )}
 
         {stats.relationships.biggestOp ? (
@@ -330,11 +406,12 @@ export default function Stats() {
             label="Biggest Op"
             value={String(stats.relationships.biggestOp.count)}
             valueClass="text-amber-400"
+            tooltip={TIPS.biggestOp}
           >
             <PlayerLinks players={stats.relationships.biggestOp.players} />
           </StatCard>
         ) : (
-          <NoData label="Biggest Op" />
+          <NoData label="Biggest Op" tooltip={TIPS.biggestOp} />
         )}
       </div>
     </div>
