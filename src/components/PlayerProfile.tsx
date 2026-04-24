@@ -221,6 +221,59 @@ export default function PlayerProfile() {
           }
         }
 
+        // Rival: smallest win/loss gap; prefer opponents who have both beaten you
+        // and whom you have beaten; tie-break by most games at that gap.
+        let rivalId: number | null = null;
+        const rivalCandidates = player.headToHead
+          .map((h) => ({
+            id: h.opponent.id,
+            wins: h.wins,
+            losses: h.losses,
+            games: h.wins + h.losses,
+            diff: Math.abs(h.wins - h.losses),
+          }))
+          .filter((h) => h.games >= 2);
+        if (rivalCandidates.length > 0) {
+          let pool = rivalCandidates.filter((h) => h.wins >= 1 && h.losses >= 1);
+          if (pool.length === 0) pool = rivalCandidates;
+          let best = pool[0]!;
+          for (const h of pool) {
+            if (h.diff < best.diff) best = h;
+            else if (h.diff === best.diff && h.games > best.games) best = h;
+            else if (
+              h.diff === best.diff &&
+              h.games === best.games &&
+              h.id < best.id
+            )
+              best = h;
+          }
+          rivalId = best.id;
+        }
+
+        // Friend: most total games played together
+        let friendId: number | null = null;
+        let maxGames = -1;
+        for (const h2h of player.headToHead) {
+          const g = h2h.wins + h2h.losses;
+          if (
+            g > maxGames ||
+            (g === maxGames &&
+              (friendId === null || h2h.opponent.id < friendId))
+          ) {
+            maxGames = g;
+            friendId = h2h.opponent.id;
+          }
+        }
+
+        const h2hBorderClass = (opponentId: number) =>
+          opponentId === nemesisId
+            ? 'border-red-500/30'
+            : opponentId === rivalId
+              ? 'border-amber-500/30'
+              : opponentId === friendId
+                ? 'border-sky-500/30'
+                : 'border-slate-700';
+
         return (
           <div className="mb-6">
             <h2 className="text-lg font-semibold mb-3">Head to Head</h2>
@@ -239,17 +292,23 @@ export default function PlayerProfile() {
                       onClick={() =>
                         setExpandedH2H(isExpanded ? null : h2h.opponent.id)
                       }
-                      className={`flex items-center justify-between bg-slate-800 border rounded-lg px-4 py-3 hover:bg-slate-700 transition-colors cursor-pointer ${
-                        h2h.opponent.id === nemesisId
-                          ? 'border-red-500/30'
-                          : 'border-slate-700'
-                      } ${isExpanded ? 'rounded-b-none' : ''}`}
+                      className={`flex items-center justify-between bg-slate-800 border rounded-lg px-4 py-3 hover:bg-slate-700 transition-colors cursor-pointer ${h2hBorderClass(h2h.opponent.id)} ${isExpanded ? 'rounded-b-none' : ''}`}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium">{h2h.opponent.name}</span>
                         {h2h.opponent.id === nemesisId && (
                           <span className="text-red-400 text-xs font-medium px-2 py-0.5 bg-red-400/10 rounded-full">
                             NEMESIS
+                          </span>
+                        )}
+                        {h2h.opponent.id === rivalId && (
+                          <span className="text-amber-400 text-xs font-medium px-2 py-0.5 bg-amber-400/10 rounded-full">
+                            RIVAL
+                          </span>
+                        )}
+                        {h2h.opponent.id === friendId && (
+                          <span className="text-sky-400 text-xs font-medium px-2 py-0.5 bg-sky-400/10 rounded-full">
+                            FRIEND
                           </span>
                         )}
                         <Link
@@ -272,11 +331,9 @@ export default function PlayerProfile() {
                       </div>
                     </div>
                     {isExpanded && h2hMatches.length > 0 && (
-                      <div className={`bg-slate-800/50 border border-t-0 rounded-b-lg px-4 py-2 space-y-1 ${
-                        h2h.opponent.id === nemesisId
-                          ? 'border-red-500/30'
-                          : 'border-slate-700'
-                      }`}>
+                      <div
+                        className={`bg-slate-800/50 border border-t-0 rounded-b-lg px-4 py-2 space-y-1 ${h2hBorderClass(h2h.opponent.id)}`}
+                      >
                         {h2hMatches.map((match) => {
                           const won = match.winnerId === player.id;
                           const eloChange = won
