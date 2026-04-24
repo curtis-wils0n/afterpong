@@ -1,4 +1,4 @@
-import type { Player, Match, PlayerProfile } from '../types';
+import type { Player, Match, PlayerProfile, StatsResponse } from '../types';
 
 const API_BASE = '/api';
 
@@ -58,5 +58,8 @@ export const api = {
       }),
     deleteLast: () =>
       fetchJSON<Match>('/matches', { method: 'DELETE' }),
+  },
+  stats: {
+    get: () => fetchJSON<StatsResponse>('/stats'),
   },
 };

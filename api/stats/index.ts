@@ -1,0 +1,302 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { db } from '../../db/index.js';
+import { players, matches } from '../../db/schema.js';
+import { asc } from 'drizzle-orm';
+import { isUpset } from '../../lib/elo.js';
+import { requireAuth } from '../_lib/auth.js';
+
+type PlayerRef = { id: number; name: string };
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const role = await requireAuth(req, res);
+  if (!role) return;
+
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const [allPlayers, allMatches] = await Promise.all([
+    db.select().from(players),
+    db.select().from(matches).orderBy(asc(matches.createdAt)),
+  ]);
+
+  const playerMap = new Map<number, PlayerRef>(
+    allPlayers.map((p) => [p.id, { id: p.id, name: p.name }]),
+  );
+  const getRef = (id: number): PlayerRef =>
+    playerMap.get(id) ?? { id, name: `Player #${id}` };
+
+  // Per-player accumulators
+  type PlayerAcc = {
+    currentElo: number;
+    peakElo: number;
+    peakDate: string;
+    minElo: number;
+    currentWinStreak: number;
+    currentLossStreak: number;
+    longestWinStreak: number;
+    longestLossStreak: number;
+    climbs: number;
+    defenses: number;
+    upsetsCaused: number;
+  };
+
+  const acc = new Map<number, PlayerAcc>();
+  for (const p of allPlayers) {
+    acc.set(p.id, {
+      currentElo: 1000,
+      peakElo: 1000,
+      peakDate: p.createdAt.toISOString(),
+      minElo: 1000,
+      currentWinStreak: 0,
+      currentLossStreak: 0,
+      longestWinStreak: 0,
+      longestLossStreak: 0,
+      climbs: 0,
+      defenses: 0,
+      upsetsCaused: 0,
+    });
+  }
+
+  // Rivalry pair map
+  const pairMap = new Map<
+    string,
+    { p1Id: number; p2Id: number; p1Wins: number; p2Wins: number }
+  >();
+
+  let biggestUpsetMatch: typeof allMatches[number] | null = null;
+
+  // Single chronological pass
+  for (const m of allMatches) {
+    const winner = acc.get(m.winnerId);
+    const loser = acc.get(m.loserId);
+    if (!winner || !loser) continue;
+
+    // Update ELO
+    winner.currentElo += m.winnerEloChange;
+    loser.currentElo += m.loserEloChange;
+
+    // Track peak and min
+    if (winner.currentElo > winner.peakElo) {
+      winner.peakElo = winner.currentElo;
+      winner.peakDate = m.createdAt.toISOString();
+    }
+    if (loser.currentElo < loser.minElo) {
+      loser.minElo = loser.currentElo;
+    }
+    if (winner.currentElo < winner.minElo) {
+      winner.minElo = winner.currentElo;
+    }
+    if (loser.currentElo > loser.peakElo) {
+      loser.peakElo = loser.currentElo;
+      loser.peakDate = m.createdAt.toISOString();
+    }
+
+    // Streaks
+    winner.currentWinStreak += 1;
+    winner.currentLossStreak = 0;
+    if (winner.currentWinStreak > winner.longestWinStreak) {
+      winner.longestWinStreak = winner.currentWinStreak;
+    }
+    loser.currentLossStreak += 1;
+    loser.currentWinStreak = 0;
+    if (loser.currentLossStreak > loser.longestLossStreak) {
+      loser.longestLossStreak = loser.currentLossStreak;
+    }
+
+    // Upsets caused
+    if (isUpset(m)) {
+      winner.upsetsCaused += 1;
+    }
+
+    // Challenge ladder stats
+    if (
+      m.isChallenge &&
+      m.winnerRankBefore != null &&
+      m.loserRankBefore != null
+    ) {
+      // Challenger is the lower-ranked (higher rank number) player
+      if (m.winnerRankBefore > m.loserRankBefore) {
+        winner.climbs += 1;
+      } else {
+        winner.defenses += 1;
+      }
+    }
+
+    // Biggest upset
+    if (
+      !biggestUpsetMatch ||
+      m.winnerEloChange > biggestUpsetMatch.winnerEloChange
+    ) {
+      biggestUpsetMatch = m;
+    }
+
+    // Rivalry
+    const lo = Math.min(m.winnerId, m.loserId);
+    const hi = Math.max(m.winnerId, m.loserId);
+    const key = `${lo}-${hi}`;
+    let pair = pairMap.get(key);
+    if (!pair) {
+      pair = { p1Id: lo, p2Id: hi, p1Wins: 0, p2Wins: 0 };
+      pairMap.set(key, pair);
+    }
+    if (m.winnerId === pair.p1Id) pair.p1Wins += 1;
+    else pair.p2Wins += 1;
+  }
+
+  // Reduce to the stats
+  type Best<T> = { value: T; score: number } | null;
+  const pickMax = <T>(items: T[], score: (t: T) => number): Best<T> => {
+    let best: Best<T> = null;
+    for (const item of items) {
+      const s = score(item);
+      if (best === null || s > best.score) {
+        best = { value: item, score: s };
+      }
+    }
+    return best;
+  };
+
+  // Collect all players tied at the maximum score
+  const pickAllMax = (
+    items: typeof allPlayers,
+    score: (p: (typeof allPlayers)[number]) => number,
+  ): { players: PlayerRef[]; score: number } | null => {
+    let bestScore = -Infinity;
+    const winners: PlayerRef[] = [];
+    for (const item of items) {
+      const s = score(item);
+      if (s > bestScore) {
+        bestScore = s;
+        winners.length = 0;
+        winners.push(getRef(item.id));
+      } else if (s === bestScore) {
+        winners.push(getRef(item.id));
+      }
+    }
+    if (winners.length === 0) return null;
+    return { players: winners, score: bestScore };
+  };
+
+  const playerList = allPlayers;
+
+  const currentWin = pickAllMax(playerList, (p) => acc.get(p.id)!.currentWinStreak);
+  const longestWin = pickAllMax(playerList, (p) => acc.get(p.id)!.longestWinStreak);
+  const currentLoss = pickAllMax(
+    playerList,
+    (p) => acc.get(p.id)!.currentLossStreak,
+  );
+  const longestLoss = pickAllMax(
+    playerList,
+    (p) => acc.get(p.id)!.longestLossStreak,
+  );
+  const mostUpsets = pickAllMax(playerList, (p) => acc.get(p.id)!.upsetsCaused);
+  const mostClimbs = pickAllMax(playerList, (p) => acc.get(p.id)!.climbs);
+  const bestDefender = pickAllMax(playerList, (p) => acc.get(p.id)!.defenses);
+  const peak = pickAllMax(playerList, (p) => acc.get(p.id)!.peakElo);
+  const climber = pickMax(playerList, (p) => {
+    const a = acc.get(p.id)!;
+    return a.currentElo - a.minElo;
+  });
+  const faller = pickMax(playerList, (p) => {
+    const a = acc.get(p.id)!;
+    return a.peakElo - a.currentElo;
+  });
+
+  // Biggest rivalry and dominator
+  let biggestRivalry:
+    | { p1: PlayerRef; p2: PlayerRef; matches: number }
+    | null = null;
+  let dominator:
+    | { dominator: PlayerRef; victim: PlayerRef; wins: number }
+    | null = null;
+
+  for (const pair of pairMap.values()) {
+    const total = pair.p1Wins + pair.p2Wins;
+    if (!biggestRivalry || total > biggestRivalry.matches) {
+      biggestRivalry = {
+        p1: getRef(pair.p1Id),
+        p2: getRef(pair.p2Id),
+        matches: total,
+      };
+    }
+
+    if (total >= 3 && (pair.p1Wins === 0 || pair.p2Wins === 0)) {
+      const winnerSide = pair.p1Wins > 0 ? pair.p1Id : pair.p2Id;
+      const loserSide = pair.p1Wins > 0 ? pair.p2Id : pair.p1Id;
+      const wins = Math.max(pair.p1Wins, pair.p2Wins);
+      if (!dominator || wins > dominator.wins) {
+        dominator = {
+          dominator: getRef(winnerSide),
+          victim: getRef(loserSide),
+          wins,
+        };
+      }
+    }
+  }
+
+  // Wrap multi-player count stats (null when score is 0)
+  const wrapCount = (
+    best: { players: PlayerRef[]; score: number } | null,
+  ): { players: PlayerRef[]; count: number } | null => {
+    if (!best || best.score <= 0) return null;
+    return { players: best.players, count: best.score };
+  };
+
+  const response = {
+    streaks: {
+      currentWinStreak: wrapCount(currentWin),
+      longestWinStreak: wrapCount(longestWin),
+      currentLossStreak: wrapCount(currentLoss),
+      longestLossStreak: wrapCount(longestLoss),
+    },
+    matches: {
+      biggestUpset: biggestUpsetMatch
+        ? {
+            winner: getRef(biggestUpsetMatch.winnerId),
+            loser: getRef(biggestUpsetMatch.loserId),
+            eloGain: biggestUpsetMatch.winnerEloChange,
+            matchDate: biggestUpsetMatch.createdAt.toISOString(),
+          }
+        : null,
+      mostUpsetsCaused: wrapCount(mostUpsets),
+    },
+    players: {
+      peakElo:
+        peak && peak.score > 1000
+          ? {
+              players: peak.players,
+              elo: peak.score,
+            }
+          : null,
+      biggestClimber:
+        climber && climber.score > 0
+          ? {
+              player: getRef(climber.value.id),
+              climb: climber.score,
+              from: acc.get(climber.value.id)!.minElo,
+              to: acc.get(climber.value.id)!.currentElo,
+            }
+          : null,
+      biggestFaller:
+        faller && faller.score > 0
+          ? {
+              player: getRef(faller.value.id),
+              fall: faller.score,
+              from: acc.get(faller.value.id)!.peakElo,
+              to: acc.get(faller.value.id)!.currentElo,
+            }
+          : null,
+    },
+    ladder: {
+      mostSuccessfulClimbs: wrapCount(mostClimbs),
+      bestDefender: wrapCount(bestDefender),
+    },
+    rivalries: {
+      biggestRivalry,
+      dominator,
+    },
+  };
+
+  return res.json(response);
+}

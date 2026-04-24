@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { isUpset } from '../../lib/elo';
 import type { Match } from '../types';
 
 export default function MatchHistory() {
@@ -92,7 +93,7 @@ export default function MatchHistory() {
                         CHALLENGE
                       </span>
                     )}
-                    {match.winnerEloChange > 20 && (
+                    {isUpset(match) && (
                       <span className="text-yellow-400 text-xs font-medium px-2 py-0.5 bg-yellow-400/10 rounded-full">
                         UPSET
                       </span>

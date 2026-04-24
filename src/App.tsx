@@ -6,6 +6,7 @@ import Leaderboard from './components/Leaderboard';
 import MatchHistory from './components/MatchHistory';
 import ChallengeBoard from './components/ChallengeBoard';
 import PlayerProfile from './components/PlayerProfile';
+import Stats from './components/Stats';
 
 export default function App() {
   const { isAuthenticated, loading } = useAuth();
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="/" element={<ChallengeBoard />} />
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/matches" element={<MatchHistory />} />
+        <Route path="/stats" element={<Stats />} />
         <Route path="/players/:id" element={<PlayerProfile />} />
         <Route path="/login" element={<Navigate to="/" replace />} />
       </Routes>

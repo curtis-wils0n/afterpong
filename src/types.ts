@@ -30,6 +30,52 @@ export interface Match {
   loser?: Player;
 }
 
+export interface PlayerRef {
+  id: number;
+  name: string;
+}
+
+export interface StatsResponse {
+  streaks: {
+    currentWinStreak: { players: PlayerRef[]; count: number } | null;
+    longestWinStreak: { players: PlayerRef[]; count: number } | null;
+    currentLossStreak: { players: PlayerRef[]; count: number } | null;
+    longestLossStreak: { players: PlayerRef[]; count: number } | null;
+  };
+  matches: {
+    biggestUpset: {
+      winner: PlayerRef;
+      loser: PlayerRef;
+      eloGain: number;
+      matchDate: string;
+    } | null;
+    mostUpsetsCaused: { players: PlayerRef[]; count: number } | null;
+  };
+  players: {
+    peakElo: { players: PlayerRef[]; elo: number } | null;
+    biggestClimber: {
+      player: PlayerRef;
+      climb: number;
+      from: number;
+      to: number;
+    } | null;
+    biggestFaller: {
+      player: PlayerRef;
+      fall: number;
+      from: number;
+      to: number;
+    } | null;
+  };
+  ladder: {
+    mostSuccessfulClimbs: { players: PlayerRef[]; count: number } | null;
+    bestDefender: { players: PlayerRef[]; count: number } | null;
+  };
+  rivalries: {
+    biggestRivalry: { p1: PlayerRef; p2: PlayerRef; matches: number } | null;
+    dominator: { dominator: PlayerRef; victim: PlayerRef; wins: number } | null;
+  };
+}
+
 export interface PlayerProfile extends Player {
   wins: number;
   losses: number;

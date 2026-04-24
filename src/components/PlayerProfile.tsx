@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
 import { api } from '../lib/api';
+import { isUpset } from '../../lib/elo';
 import type { PlayerProfile as PlayerProfileType } from '../types';
 
 export default function PlayerProfile() {
@@ -391,6 +392,11 @@ export default function PlayerProfile() {
                                     CHALLENGE
                                   </span>
                                 )}
+                                {isUpset(match) && (
+                                  <span className="text-yellow-400 text-xs font-medium px-1.5 py-0.5 bg-yellow-400/10 rounded-full">
+                                    UPSET
+                                  </span>
+                                )}
                               </div>
                               <span
                                 className={`text-sm font-mono tabular-nums ${eloChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
@@ -474,6 +480,11 @@ export default function PlayerProfile() {
                       {match.isChallenge && (
                         <span className="text-purple-400 text-xs font-medium px-2 py-0.5 bg-purple-400/10 rounded-full">
                           CHALLENGE
+                        </span>
+                      )}
+                      {isUpset(match) && (
+                        <span className="text-yellow-400 text-xs font-medium px-2 py-0.5 bg-yellow-400/10 rounded-full">
+                          UPSET
                         </span>
                       )}
                       <span
