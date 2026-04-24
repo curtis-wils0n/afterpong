@@ -295,6 +295,48 @@ export default function Stats() {
           <NoData label="Dominator" />
         )}
       </div>
+
+      {/* Relationships */}
+      <h2 className="text-lg font-semibold mb-3">Relationships</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {stats.relationships.mostFriendly ? (
+          <StatCard
+            label="Most Friendly"
+            value={String(stats.relationships.mostFriendly.count)}
+            valueClass="text-sky-400"
+          >
+            <PlayerLinks players={stats.relationships.mostFriendly.players} />
+          </StatCard>
+        ) : (
+          <NoData label="Most Friendly" />
+        )}
+
+        {stats.relationships.biggestVillain ? (
+          <StatCard
+            label="Biggest Villain"
+            value={String(stats.relationships.biggestVillain.count)}
+            valueClass="text-red-400"
+          >
+            <PlayerLinks
+              players={stats.relationships.biggestVillain.players}
+            />
+          </StatCard>
+        ) : (
+          <NoData label="Biggest Villain" />
+        )}
+
+        {stats.relationships.biggestOp ? (
+          <StatCard
+            label="Biggest Op"
+            value={String(stats.relationships.biggestOp.count)}
+            valueClass="text-amber-400"
+          >
+            <PlayerLinks players={stats.relationships.biggestOp.players} />
+          </StatCard>
+        ) : (
+          <NoData label="Biggest Op" />
+        )}
+      </div>
     </div>
   );
 }

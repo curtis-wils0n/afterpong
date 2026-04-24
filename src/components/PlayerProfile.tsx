@@ -3,6 +3,11 @@ import { useParams, Link } from 'react-router-dom';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
 import { api } from '../lib/api';
 import { isUpset } from '../../lib/elo';
+import {
+  computeNemesis,
+  computeRival,
+  computeFriend,
+} from '../../lib/badges';
 import type { PlayerProfile as PlayerProfileType } from '../types';
 
 export default function PlayerProfile() {
@@ -212,62 +217,14 @@ export default function PlayerProfile() {
 
       {/* Head to Head */}
       {player.headToHead.length > 0 && (() => {
-        // Find nemesis: opponent who has taken the most ELO from you (most negative net)
-        let nemesisId: number | null = null;
-        let worstNet = 0;
-        for (const h2h of player.headToHead) {
-          const net = player.matches
-            .filter(m => m.winnerId === h2h.opponent.id || m.loserId === h2h.opponent.id)
-            .reduce((sum, m) => sum + (m.winnerId === player.id ? m.winnerEloChange : m.loserEloChange), 0);
-          if (net < worstNet) {
-            worstNet = net;
-            nemesisId = h2h.opponent.id;
-          }
-        }
-
-        // Rival: smallest win/loss gap; prefer opponents who have both beaten you
-        // and whom you have beaten; tie-break by most games at that gap.
-        let rivalId: number | null = null;
-        const rivalCandidates = player.headToHead
-          .map((h) => ({
-            id: h.opponent.id,
-            wins: h.wins,
-            losses: h.losses,
-            games: h.wins + h.losses,
-            diff: Math.abs(h.wins - h.losses),
-          }))
-          .filter((h) => h.games >= 2);
-        if (rivalCandidates.length > 0) {
-          let pool = rivalCandidates.filter((h) => h.wins >= 1 && h.losses >= 1);
-          if (pool.length === 0) pool = rivalCandidates;
-          let best = pool[0]!;
-          for (const h of pool) {
-            if (h.diff < best.diff) best = h;
-            else if (h.diff === best.diff && h.games > best.games) best = h;
-            else if (
-              h.diff === best.diff &&
-              h.games === best.games &&
-              h.id < best.id
-            )
-              best = h;
-          }
-          rivalId = best.id;
-        }
-
-        // Friend: most total games played together
-        let friendId: number | null = null;
-        let maxGames = -1;
-        for (const h2h of player.headToHead) {
-          const g = h2h.wins + h2h.losses;
-          if (
-            g > maxGames ||
-            (g === maxGames &&
-              (friendId === null || h2h.opponent.id < friendId))
-          ) {
-            maxGames = g;
-            friendId = h2h.opponent.id;
-          }
-        }
+        const h2hEntries = player.headToHead.map((h) => ({
+          opponentId: h.opponent.id,
+          wins: h.wins,
+          losses: h.losses,
+        }));
+        const nemesisId = computeNemesis(player.id, player.matches, h2hEntries);
+        const rivalId = computeRival(h2hEntries);
+        const friendId = computeFriend(h2hEntries);
 
         const h2hBorderClass = (opponentId: number) =>
           opponentId === nemesisId

@@ -74,6 +74,11 @@ export interface StatsResponse {
     biggestRivalry: { p1: PlayerRef; p2: PlayerRef; matches: number } | null;
     dominator: { dominator: PlayerRef; victim: PlayerRef; wins: number } | null;
   };
+  relationships: {
+    mostFriendly: { players: PlayerRef[]; count: number } | null;
+    biggestVillain: { players: PlayerRef[]; count: number } | null;
+    biggestOp: { players: PlayerRef[]; count: number } | null;
+  };
 }
 
 export interface PlayerProfile extends Player {

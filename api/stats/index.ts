@@ -3,6 +3,11 @@ import { db } from '../../db/index.js';
 import { players, matches } from '../../db/schema.js';
 import { asc } from 'drizzle-orm';
 import { isUpset } from '../../lib/elo.js';
+import {
+  computeNemesis,
+  computeRival,
+  computeFriend,
+} from '../../lib/badges.js';
 import { requireAuth } from '../_lib/auth.js';
 
 type PlayerRef = { id: number; name: string };
@@ -144,6 +149,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else pair.p2Wins += 1;
   }
 
+  // Build per-player h2h structures so we can run the badge helpers.
+  const playerH2H = new Map<
+    number,
+    { matches: typeof allMatches; h2h: { opponentId: number; wins: number; losses: number }[] }
+  >();
+  for (const p of allPlayers) {
+    const playerMatches = allMatches.filter(
+      (m) => m.winnerId === p.id || m.loserId === p.id,
+    );
+    const h2hMap = new Map<number, { wins: number; losses: number }>();
+    for (const m of playerMatches) {
+      const opponentId = m.winnerId === p.id ? m.loserId : m.winnerId;
+      const won = m.winnerId === p.id;
+      const rec = h2hMap.get(opponentId) ?? { wins: 0, losses: 0 };
+      if (won) rec.wins += 1;
+      else rec.losses += 1;
+      h2hMap.set(opponentId, rec);
+    }
+    const h2h = [...h2hMap.entries()].map(([opponentId, rec]) => ({
+      opponentId,
+      ...rec,
+    }));
+    playerH2H.set(p.id, { matches: playerMatches, h2h });
+  }
+
+  // Count badge designations per opponent
+  const friendCounts = new Map<number, number>();
+  const nemesisCounts = new Map<number, number>();
+  const rivalCounts = new Map<number, number>();
+
+  for (const p of allPlayers) {
+    const data = playerH2H.get(p.id)!;
+    const nemesisId = computeNemesis(p.id, data.matches, data.h2h);
+    const rivalId = computeRival(data.h2h);
+    const friendId = computeFriend(data.h2h);
+
+    if (nemesisId !== null) {
+      nemesisCounts.set(nemesisId, (nemesisCounts.get(nemesisId) ?? 0) + 1);
+    }
+    if (rivalId !== null) {
+      rivalCounts.set(rivalId, (rivalCounts.get(rivalId) ?? 0) + 1);
+    }
+    if (friendId !== null) {
+      friendCounts.set(friendId, (friendCounts.get(friendId) ?? 0) + 1);
+    }
+  }
+
   // Reduce to the stats
   type Best<T> = { value: T; score: number } | null;
   const pickMax = <T>(items: T[], score: (t: T) => number): Best<T> => {
@@ -192,6 +244,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   );
   const mostUpsets = pickAllMax(playerList, (p) => acc.get(p.id)!.upsetsCaused);
   const mostClimbs = pickAllMax(playerList, (p) => acc.get(p.id)!.climbs);
+  const mostFriendly = pickAllMax(playerList, (p) => friendCounts.get(p.id) ?? 0);
+  const biggestVillain = pickAllMax(
+    playerList,
+    (p) => nemesisCounts.get(p.id) ?? 0,
+  );
+  const biggestOp = pickAllMax(playerList, (p) => rivalCounts.get(p.id) ?? 0);
   const bestDefender = pickAllMax(playerList, (p) => acc.get(p.id)!.defenses);
   const peak = pickAllMax(playerList, (p) => acc.get(p.id)!.peakElo);
   const climber = pickMax(playerList, (p) => {
@@ -295,6 +353,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rivalries: {
       biggestRivalry,
       dominator,
+    },
+    relationships: {
+      mostFriendly: wrapCount(mostFriendly),
+      biggestVillain: wrapCount(biggestVillain),
+      biggestOp: wrapCount(biggestOp),
     },
   };
 
