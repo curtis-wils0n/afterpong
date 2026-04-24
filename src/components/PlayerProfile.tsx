@@ -330,12 +330,11 @@ export default function PlayerProfile() {
         );
       })()}
 
-      {/* Recent Matches */}
       {player.matches.length > 0 && (
         <div>
           <h2 className="text-lg font-semibold mb-3">Match History</h2>
           <div className="space-y-2">
-            {player.matches.slice(0, 20).map((match) => {
+            {player.matches.map((match) => {
               const won = match.winnerId === player.id;
               const eloChange = won
                 ? match.winnerEloChange
