@@ -211,12 +211,15 @@ export default function PlayerProfile() {
 
       {/* Head to Head */}
       {player.headToHead.length > 0 && (() => {
-        // Find nemesis: opponent with most losses where losses > wins
+        // Find nemesis: opponent who has taken the most ELO from you (most negative net)
         let nemesisId: number | null = null;
-        let maxLosses = 0;
+        let worstNet = 0;
         for (const h2h of player.headToHead) {
-          if (h2h.losses > h2h.wins && h2h.losses > maxLosses) {
-            maxLosses = h2h.losses;
+          const net = player.matches
+            .filter(m => m.winnerId === h2h.opponent.id || m.loserId === h2h.opponent.id)
+            .reduce((sum, m) => sum + (m.winnerId === player.id ? m.winnerEloChange : m.loserEloChange), 0);
+          if (net < worstNet) {
+            worstNet = net;
             nemesisId = h2h.opponent.id;
           }
         }
@@ -286,6 +289,13 @@ export default function PlayerProfile() {
                     m.loserId === h2h.opponent.id,
                 );
 
+                const netElo = h2hMatches.reduce((sum, m) => {
+                  const change = m.winnerId === player.id
+                    ? m.winnerEloChange
+                    : m.loserEloChange;
+                  return sum + change;
+                }, 0);
+
                 return (
                   <div key={h2h.opponent.id}>
                     <div
@@ -319,11 +329,15 @@ export default function PlayerProfile() {
                           View profile
                         </Link>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
                         <span className="text-sm">
                           <span className="text-emerald-400">{h2h.wins}W</span>
                           <span className="text-slate-600 mx-1">-</span>
                           <span className="text-red-400">{h2h.losses}L</span>
+                        </span>
+                        <span className="text-slate-700">|</span>
+                        <span className={`text-xs font-mono tabular-nums ${netElo >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {netElo >= 0 ? '+' : ''}{netElo}
                         </span>
                         <span className="text-slate-500 text-xs">
                           {isExpanded ? '\u25B2' : '\u25BC'}
