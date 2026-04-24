@@ -72,7 +72,12 @@ export interface StatsResponse {
   };
   rivalries: {
     biggestRivalry: { p1: PlayerRef; p2: PlayerRef; matches: number } | null;
-    dominator: { dominator: PlayerRef; victim: PlayerRef; wins: number } | null;
+    dominator: {
+      dominator: PlayerRef;
+      victim: PlayerRef;
+      wins: number;
+      losses: number;
+    } | null;
   };
   relationships: {
     mostFriendly: { players: PlayerRef[]; count: number } | null;

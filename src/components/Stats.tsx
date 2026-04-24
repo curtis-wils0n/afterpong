@@ -100,7 +100,7 @@ const TIPS = {
     'Career count of challenge matches won as the higher-ranked defender',
   biggestRivalry: 'Pair of players with the most total matches between them',
   dominator:
-    'Largest one-sided head-to-head sweep (min 3 games, opponent has 0 wins)',
+    'Largest gap between wins and losses in any head-to-head matchup',
   mostFriendly:
     'Player most often shown as the FRIEND badge on others’ profiles (most games together)',
   biggestVillain:
@@ -357,7 +357,7 @@ export default function Stats() {
         {stats.rivalries.dominator ? (
           <StatCard
             label="Dominator"
-            value={`${stats.rivalries.dominator.wins}-0`}
+            value={`${stats.rivalries.dominator.wins}-${stats.rivalries.dominator.losses}`}
             valueClass="text-amber-400"
             tooltip={TIPS.dominator}
           >

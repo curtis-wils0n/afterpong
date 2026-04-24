@@ -266,7 +266,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     | { p1: PlayerRef; p2: PlayerRef; matches: number }
     | null = null;
   let dominator:
-    | { dominator: PlayerRef; victim: PlayerRef; wins: number }
+    | { dominator: PlayerRef; victim: PlayerRef; wins: number; losses: number }
     | null = null;
 
   for (const pair of pairMap.values()) {
@@ -279,15 +279,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
     }
 
-    if (total >= 3 && (pair.p1Wins === 0 || pair.p2Wins === 0)) {
-      const winnerSide = pair.p1Wins > 0 ? pair.p1Id : pair.p2Id;
-      const loserSide = pair.p1Wins > 0 ? pair.p2Id : pair.p1Id;
+    // Dominator: pair with the largest absolute win gap.
+    if (pair.p1Wins !== pair.p2Wins) {
       const wins = Math.max(pair.p1Wins, pair.p2Wins);
-      if (!dominator || wins > dominator.wins) {
+      const losses = Math.min(pair.p1Wins, pair.p2Wins);
+      const gap = wins - losses;
+      const winnerSide = pair.p1Wins > pair.p2Wins ? pair.p1Id : pair.p2Id;
+      const loserSide = pair.p1Wins > pair.p2Wins ? pair.p2Id : pair.p1Id;
+      if (!dominator || gap > dominator.wins - dominator.losses) {
         dominator = {
           dominator: getRef(winnerSide),
           victim: getRef(loserSide),
           wins,
+          losses,
         };
       }
     }
