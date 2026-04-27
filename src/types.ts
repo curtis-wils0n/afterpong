@@ -30,6 +30,11 @@ export interface Match {
   loser?: Player;
 }
 
+export interface MatchListResponse {
+  matches: Match[];
+  total: number;
+}
+
 export interface PlayerRef {
   id: number;
   name: string;

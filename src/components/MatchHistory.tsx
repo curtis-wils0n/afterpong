@@ -1,27 +1,61 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { isUpset } from '../../lib/elo';
-import type { Match } from '../types';
+import type { Match, Player } from '../types';
+
+const PAGE_SIZE = 25;
 
 export default function MatchHistory() {
   const { isAdmin } = useAuth();
   const [matches, setMatches] = useState<Match[]>([]);
+  const [total, setTotal] = useState(0);
+  const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [undoing, setUndoing] = useState(false);
+  const [page, setPage] = useState(0);
+  const [filter1, setFilter1] = useState<number | ''>('');
+  const [filter2, setFilter2] = useState<number | ''>('');
+
+  const filterIds = useMemo(() => {
+    const ids: number[] = [];
+    if (filter1 !== '') ids.push(filter1);
+    if (filter2 !== '' && filter2 !== filter1) ids.push(filter2);
+    return ids;
+  }, [filter1, filter2]);
+
+  const isFiltered = filterIds.length > 0;
+
+  useEffect(() => {
+    api.players.list().then(setPlayers).catch(console.error);
+  }, []);
 
   const fetchMatches = () => {
+    setLoading(true);
     api.matches
-      .list()
-      .then(setMatches)
+      .list({
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+        playerIds: filterIds.length > 0 ? filterIds : undefined,
+      })
+      .then((res) => {
+        setMatches(res.matches);
+        setTotal(res.total);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     fetchMatches();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, filter1, filter2]);
+
+  // Reset to page 0 when filters change
+  useEffect(() => {
+    setPage(0);
+  }, [filter1, filter2]);
 
   const handleUndo = async () => {
     if (!confirm('Undo the most recent match? This will revert ELO and ladder changes.')) return;
@@ -46,13 +80,70 @@ export default function MatchHistory() {
     });
   };
 
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const canPrev = page > 0;
+  const canNext = (page + 1) * PAGE_SIZE < total;
+  const showUndo = isAdmin && !isFiltered && page === 0;
+
+  const player2Options = players.filter((p) => p.id !== filter1);
+
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Match History</h1>
+
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="flex-1">
+          <label className="block text-xs text-slate-500 mb-1">Player</label>
+          <select
+            value={filter1}
+            onChange={(e) => setFilter1(e.target.value ? Number(e.target.value) : '')}
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
+          >
+            <option value="">All players</option>
+            {players.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex-1">
+          <label className="block text-xs text-slate-500 mb-1">vs. Player (optional)</label>
+          <select
+            value={filter2}
+            onChange={(e) => setFilter2(e.target.value ? Number(e.target.value) : '')}
+            disabled={filter1 === ''}
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 disabled:opacity-50"
+          >
+            <option value="">Any opponent</option>
+            {player2Options.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {(filter1 !== '' || filter2 !== '') && (
+          <div className="flex items-end">
+            <button
+              onClick={() => {
+                setFilter1('');
+                setFilter2('');
+              }}
+              className="text-xs text-slate-400 hover:text-slate-200 bg-slate-700/50 hover:bg-slate-700 px-3 py-2 rounded-lg transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+        )}
+      </div>
+
       {loading ? (
         <div className="text-center text-slate-500 py-12">Loading...</div>
       ) : matches.length === 0 ? (
-        <div className="text-center text-slate-500 py-12">No matches yet.</div>
+        <div className="text-center text-slate-500 py-12">
+          {isFiltered ? 'No matches match these filters.' : 'No matches yet.'}
+        </div>
       ) : (
         <div className="space-y-2">
           {matches.map((match, index) => (
@@ -112,7 +203,7 @@ export default function MatchHistory() {
                   </div>
                 </div>
               </div>
-              {index === 0 && isAdmin && (
+              {index === 0 && showUndo && (
                 <button
                   onClick={handleUndo}
                   disabled={undoing}
@@ -123,6 +214,30 @@ export default function MatchHistory() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {total > PAGE_SIZE && (
+        <div className="flex items-center justify-between mt-4 text-sm">
+          <span className="text-slate-500">
+            Page {page + 1} of {totalPages} · {total} {total === 1 ? 'match' : 'matches'}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={!canPrev || loading}
+              className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Prev
+            </button>
+            <button
+              onClick={() => setPage((p) => p + 1)}
+              disabled={!canNext || loading}
+              className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
     </div>

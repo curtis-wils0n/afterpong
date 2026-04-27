@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { db } from '../../db/index.js';
 import { players, matches } from '../../db/schema.js';
-import { eq, desc, inArray } from 'drizzle-orm';
+import { eq, desc, inArray, and, or, sql } from 'drizzle-orm';
 import { calculateEloChange } from '../../lib/elo.js';
 import { requireAuth, requireAdmin } from '../_lib/auth.js';
 
@@ -15,14 +15,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'GET') {
-    const allMatches = await db
-      .select()
-      .from(matches)
-      .orderBy(desc(matches.createdAt))
-      .limit(50);
+    const limitParam = Number(req.query.limit);
+    const offsetParam = Number(req.query.offset);
+    const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 200) : 50;
+    const offset = Number.isFinite(offsetParam) && offsetParam >= 0 ? offsetParam : 0;
+
+    const playerIdsParam = typeof req.query.playerIds === 'string' ? req.query.playerIds : '';
+    const filterIds = playerIdsParam
+      .split(',')
+      .map(s => Number(s.trim()))
+      .filter(n => Number.isFinite(n) && n > 0)
+      .slice(0, 2);
+
+    let whereClause = undefined;
+    if (filterIds.length === 1) {
+      const [a] = filterIds;
+      whereClause = or(eq(matches.winnerId, a), eq(matches.loserId, a));
+    } else if (filterIds.length === 2) {
+      const [a, b] = filterIds;
+      whereClause = or(
+        and(eq(matches.winnerId, a), eq(matches.loserId, b)),
+        and(eq(matches.winnerId, b), eq(matches.loserId, a)),
+      );
+    }
+
+    const baseQuery = whereClause
+      ? db.select().from(matches).where(whereClause)
+      : db.select().from(matches);
+
+    const countQuery = whereClause
+      ? db.select({ count: sql<number>`count(*)::int` }).from(matches).where(whereClause)
+      : db.select({ count: sql<number>`count(*)::int` }).from(matches);
+
+    const [pageMatches, totalRows] = await Promise.all([
+      baseQuery.orderBy(desc(matches.createdAt)).limit(limit).offset(offset),
+      countQuery,
+    ]);
+
+    const total = totalRows[0]?.count ?? 0;
 
     const playerIds = new Set<number>();
-    allMatches.forEach(m => {
+    pageMatches.forEach(m => {
       playerIds.add(m.winnerId);
       playerIds.add(m.loserId);
     });
@@ -33,13 +66,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const playerMap = Object.fromEntries(playersList.map(p => [p.id, p]));
 
-    const matchesWithPlayers = allMatches.map(m => ({
+    const matchesWithPlayers = pageMatches.map(m => ({
       ...m,
       winner: playerMap[m.winnerId],
       loser: playerMap[m.loserId],
     }));
 
-    return res.json(matchesWithPlayers);
+    return res.json({ matches: matchesWithPlayers, total });
   }
 
   if (req.method === 'POST') {

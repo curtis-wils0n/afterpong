@@ -1,4 +1,4 @@
-import type { Player, Match, PlayerProfile, StatsResponse } from '../types';
+import type { Player, Match, MatchListResponse, PlayerProfile, StatsResponse } from '../types';
 
 const API_BASE = '/api';
 
@@ -43,7 +43,16 @@ export const api = {
       }),
   },
   matches: {
-    list: () => fetchJSON<Match[]>('/matches'),
+    list: (opts?: { limit?: number; offset?: number; playerIds?: number[] }) => {
+      const params = new URLSearchParams();
+      if (opts?.limit != null) params.set('limit', String(opts.limit));
+      if (opts?.offset != null) params.set('offset', String(opts.offset));
+      if (opts?.playerIds && opts.playerIds.length > 0) {
+        params.set('playerIds', opts.playerIds.join(','));
+      }
+      const qs = params.toString();
+      return fetchJSON<MatchListResponse>(`/matches${qs ? `?${qs}` : ''}`);
+    },
     create: (data: {
       winnerId: number;
       loserId: number;
