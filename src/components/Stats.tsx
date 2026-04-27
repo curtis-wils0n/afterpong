@@ -454,7 +454,7 @@ export default function Stats() {
 
         {stats.players.biggestClimber ? (
           <StatCard
-            label="Biggest Climber"
+            label="Biggest Climb"
             value={`+${stats.players.biggestClimber.climb}`}
             valueClass="text-emerald-400"
             tooltip={TIPS.biggestClimber}
@@ -467,12 +467,12 @@ export default function Stats() {
             </span>
           </StatCard>
         ) : (
-          <NoData label="Biggest Climber" tooltip={TIPS.biggestClimber} />
+          <NoData label="Biggest Climb" tooltip={TIPS.biggestClimber} />
         )}
 
         {stats.players.biggestFaller ? (
           <StatCard
-            label="Biggest Faller"
+            label="Biggest Fall"
             value={`-${stats.players.biggestFaller.fall}`}
             valueClass="text-red-400"
             tooltip={TIPS.biggestFaller}
@@ -485,7 +485,7 @@ export default function Stats() {
             </span>
           </StatCard>
         ) : (
-          <NoData label="Biggest Faller" tooltip={TIPS.biggestFaller} />
+          <NoData label="Biggest Fall" tooltip={TIPS.biggestFaller} />
         )}
       </div>
 
