@@ -79,6 +79,13 @@ export default function PlayerProfile() {
     return points;
   })();
 
+  const peakElo = eloHistory.length > 0
+    ? Math.max(...eloHistory.map((p) => p.elo))
+    : null;
+  const minElo = eloHistory.length > 0
+    ? Math.min(...eloHistory.map((p) => p.elo))
+    : null;
+
   return (
     <div>
       <Link
@@ -99,7 +106,16 @@ export default function PlayerProfile() {
               </span>
             )}
           </div>
-          <span className="text-3xl font-mono font-bold">{player.elo}</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-mono font-bold">{player.elo}</span>
+            {peakElo != null && minElo != null && (
+              <span className="text-xs font-mono tabular-nums text-slate-600">
+                <span className="text-emerald-400/40">▲{peakElo}</span>
+                {' '}
+                <span className="text-red-400/40">▼{minElo}</span>
+              </span>
+            )}
+          </div>
         </div>
         <div className="grid grid-cols-4 gap-4 text-center">
           <div>
