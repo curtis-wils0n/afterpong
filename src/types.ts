@@ -84,13 +84,6 @@ export interface StatsResponse {
     biggestVillain: { players: PlayerRef[]; count: number } | null;
     biggestOp: { players: PlayerRef[]; count: number } | null;
   };
-  eloHistory: {
-    players: {
-      id: number;
-      name: string;
-      points: { t: string; elo: number }[];
-    }[];
-  };
 }
 
 export interface PlayerProfile extends Player {

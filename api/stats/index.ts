@@ -47,7 +47,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   };
 
   const acc = new Map<number, PlayerAcc>();
-  const eloHistory = new Map<number, { t: string; elo: number }[]>();
   for (const p of allPlayers) {
     acc.set(p.id, {
       currentElo: 1000,
@@ -62,7 +61,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       defenses: 0,
       upsetsCaused: 0,
     });
-    eloHistory.set(p.id, [{ t: p.createdAt.toISOString(), elo: 1000 }]);
   }
 
   // Rivalry pair map
@@ -82,10 +80,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Update ELO
     winner.currentElo += m.winnerEloChange;
     loser.currentElo += m.loserEloChange;
-
-    const ts = m.createdAt.toISOString();
-    eloHistory.get(m.winnerId)!.push({ t: ts, elo: winner.currentElo });
-    eloHistory.get(m.loserId)!.push({ t: ts, elo: loser.currentElo });
 
     // Track peak and min
     if (winner.currentElo > winner.peakElo) {
@@ -368,13 +362,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       mostFriendly: wrapCount(mostFriendly),
       biggestVillain: wrapCount(biggestVillain),
       biggestOp: wrapCount(biggestOp),
-    },
-    eloHistory: {
-      players: allPlayers.map((p) => ({
-        id: p.id,
-        name: p.name,
-        points: eloHistory.get(p.id) ?? [],
-      })),
     },
   };
 
