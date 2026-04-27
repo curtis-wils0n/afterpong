@@ -1,0 +1,122 @@
+name: Neon Preview Branch
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+concurrency:
+  group: neon-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Create Neon branch
+        id: neon
+        uses: neondatabase/create-branch-action@v5
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch_name: preview/pr-${{ github.event.pull_request.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Reset branch from parent
+        if: github.event.action == 'synchronize'
+        uses: neondatabase/reset-branch-action@v1
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch: preview/pr-${{ github.event.pull_request.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Apply schema with drizzle-kit
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url_pooled }}
+        run: npm run db:push
+
+      - name: Set Vercel preview DATABASE_URL
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          GIT_BRANCH: ${{ github.event.pull_request.head.ref }}
+          DB_URL: ${{ steps.neon.outputs.db_url_pooled }}
+        run: |
+          set -euo pipefail
+          existing=$(curl -fsS \
+            "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env?gitBranch=$GIT_BRANCH" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            | jq -r '.envs[] | select(.key=="DATABASE_URL") | .id')
+          for id in $existing; do
+            curl -fsS -X DELETE \
+              "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env/$id" \
+              -H "Authorization: Bearer $VERCEL_TOKEN" > /dev/null
+          done
+          curl -fsS -X POST \
+            "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n --arg val "$DB_URL" --arg br "$GIT_BRANCH" \
+              '{key:"DATABASE_URL",value:$val,type:"encrypted",target:["preview"],gitBranch:$br}')" \
+            > /dev/null
+
+      - name: Trigger preview deploy with new env
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          PROJECT_NAME=$(curl -fsS \
+            "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" | jq -r .name)
+          REPO_ID=$(curl -fsS \
+            "https://api.github.com/repos/${{ github.repository }}" | jq -r .id)
+          curl -fsS -X POST \
+            "https://api.vercel.com/v13/deployments" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg name "$PROJECT_NAME" \
+              --arg ref "${{ github.event.pull_request.head.ref }}" \
+              --arg sha "${{ github.event.pull_request.head.sha }}" \
+              --argjson repoId "$REPO_ID" \
+              '{name:$name,gitSource:{type:"github",repoId:$repoId,ref:$ref,sha:$sha},target:"preview"}')" \
+            > /dev/null
+
+  teardown:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete Neon branch
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ secrets.NEON_PROJECT_ID }}
+          branch: preview/pr-${{ github.event.pull_request.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Remove Vercel preview env override
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          GIT_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          existing=$(curl -fsS \
+            "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env?gitBranch=$GIT_BRANCH" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            | jq -r '.envs[] | select(.key=="DATABASE_URL") | .id')
+          for id in $existing; do
+            curl -fsS -X DELETE \
+              "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env/$id" \
+              -H "Authorization: Bearer $VERCEL_TOKEN" > /dev/null
+          done
