@@ -139,6 +139,24 @@ function colorFor(index: number, total: number) {
   return `hsl(${hue}, 70%, 60%)`;
 }
 
+// Returns YYYY-MM-DD in the viewer's local timezone so days line up with
+// what someone seeing match timestamps in their browser would expect.
+function localDayKey(t: number) {
+  const d = new Date(t);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function formatDayLabel(dayKey: string) {
+  const [y, m, d] = dayKey.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 function EloHistoryChart({
   players,
 }: {
@@ -146,7 +164,11 @@ function EloHistoryChart({
 }) {
   const [windowKey, setWindowKey] = useState<WindowKey>('all');
   const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
 
+  // Per-player series: one point per local day where they actually played
+  // (drop the synthetic createdAt point — it's not a game day). Days with
+  // no games never enter the data, so the X axis collapses dead stretches.
   const series = useMemo(() => {
     const opt = WINDOW_OPTIONS.find((o) => o.key === windowKey)!;
     const now = Date.now();
@@ -154,89 +176,79 @@ function EloHistoryChart({
       opt.days != null ? now - opt.days * 24 * 60 * 60 * 1000 : null;
 
     return players.map((p) => {
-      const pts = p.points.map((pt) => ({
-        t: new Date(pt.t).getTime(),
-        elo: pt.elo,
-      }));
-
-      if (windowStart == null) return { ...p, data: pts };
-
-      // Most recent point at or before windowStart becomes the anchor at windowStart.
-      let anchorElo: number | null = null;
-      const inWindow: { t: number; elo: number }[] = [];
-      for (const pt of pts) {
-        if (pt.t <= windowStart) {
-          anchorElo = pt.elo;
-        } else {
-          inWindow.push(pt);
-        }
+      // p.points[0] is the synthetic { createdAt, 1000 } from the API.
+      const matchPts = p.points.slice(1);
+      const byDay = new Map<string, { day: string; t: number; elo: number }>();
+      for (const pt of matchPts) {
+        const t = new Date(pt.t).getTime();
+        if (windowStart != null && t < windowStart) continue;
+        const day = localDayKey(t);
+        const prev = byDay.get(day);
+        if (!prev || prev.t <= t) byDay.set(day, { day, t, elo: pt.elo });
       }
-      const data: { t: number; elo: number }[] = [];
-      if (anchorElo != null) data.push({ t: windowStart, elo: anchorElo });
-      data.push(...inWindow);
+      const data = [...byDay.values()].sort((a, b) => a.t - b.t);
       return { ...p, data };
     });
   }, [players, windowKey]);
 
-  const visibleSeries = series.filter((s) => s.data.length > 0);
+  // Players that have any data in the current window — these populate the
+  // legend. `visibleSeries` is the subset the user hasn't toggled off.
+  const eligibleSeries = series.filter((s) => s.data.length > 0);
+  const visibleSeries = eligibleSeries.filter((s) => !hiddenIds.has(s.id));
 
-  // Unified dataset: one row per distinct timestamp with each player's ELO
-  // forward-filled. Lets the tooltip show every player at any hovered x.
+  // Union of game days across visible players, in chronological order.
+  const dayKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of visibleSeries) for (const pt of s.data) set.add(pt.day);
+    return [...set].sort();
+  }, [visibleSeries]);
+
+  // One row per game-day. Each player's value is forward-filled from their
+  // most recent point at-or-before that day so the tooltip can show every
+  // visible player, and idx provides uniform x spacing.
   const combinedData = useMemo(() => {
-    const allTimes = Array.from(
-      new Set(visibleSeries.flatMap((s) => s.data.map((pt) => pt.t))),
-    ).sort((a, b) => a - b);
-
     const cursors = visibleSeries.map(() => 0);
-    const lastValues: (number | null)[] = visibleSeries.map(() => null);
+    const last: (number | null)[] = visibleSeries.map(() => null);
 
-    return allTimes.map((t) => {
-      const row: Record<string, number | null> = { t };
+    return dayKeys.map((day, idx) => {
+      const row: Record<string, number | string | null> = { idx, day };
       visibleSeries.forEach((s, i) => {
-        while (cursors[i] < s.data.length && s.data[cursors[i]].t <= t) {
-          lastValues[i] = s.data[cursors[i]].elo;
+        while (cursors[i] < s.data.length && s.data[cursors[i]].day <= day) {
+          last[i] = s.data[cursors[i]].elo;
           cursors[i]++;
         }
-        row[`p${s.id}`] = lastValues[i];
+        row[`p${s.id}`] = last[i];
       });
       return row;
     });
+  }, [visibleSeries, dayKeys]);
+
+  const yDomain = useMemo(() => {
+    const elos: number[] = [];
+    for (const s of visibleSeries) for (const pt of s.data) elos.push(pt.elo);
+    if (elos.length === 0) return [980, 1020] as [number, number];
+    return [Math.min(...elos) - 20, Math.max(...elos) + 20] as [number, number];
   }, [visibleSeries]);
 
-  const { domain, yDomain } = useMemo(() => {
-    const opt = WINDOW_OPTIONS.find((o) => o.key === windowKey)!;
-    const now = Date.now();
-    const allTimes: number[] = [];
-    const allElos: number[] = [];
-    for (const s of visibleSeries) {
-      for (const pt of s.data) {
-        allTimes.push(pt.t);
-        allElos.push(pt.elo);
-      }
-    }
-    const tStart =
-      opt.days != null
-        ? now - opt.days * 24 * 60 * 60 * 1000
-        : (allTimes.length > 0 ? Math.min(...allTimes) : now);
-    const tEnd = now;
-    const eMin = allElos.length > 0 ? Math.min(...allElos) : 1000;
-    const eMax = allElos.length > 0 ? Math.max(...allElos) : 1000;
-    return {
-      domain: [tStart, tEnd] as [number, number],
-      yDomain: [eMin - 20, eMax + 20] as [number, number],
-    };
-  }, [visibleSeries, windowKey]);
-
-  const formatTick = (t: number) =>
-    new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
+  // Colors are stable per legend slot regardless of which lines are hidden.
   const colorById = new Map(
-    visibleSeries.map((s, i) => [s.id, colorFor(i, visibleSeries.length)]),
+    eligibleSeries.map((s, i) => [s.id, colorFor(i, eligibleSeries.length)]),
   );
-  const nameById = new Map(visibleSeries.map((s) => [s.id, s.name]));
+  const nameById = new Map(eligibleSeries.map((s) => [s.id, s.name]));
+
+  const tickInterval = Math.max(0, Math.ceil(dayKeys.length / 8) - 1);
+
+  const toggleHidden = (id: number) => {
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-6">
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-6 h-[520px] flex flex-col">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm text-slate-400">ELO over time</h3>
         <div className="flex gap-1">
@@ -256,27 +268,30 @@ function EloHistoryChart({
           ))}
         </div>
       </div>
-      {visibleSeries.length === 0 ? (
-        <div className="text-slate-600 text-sm py-12 text-center">
+      {eligibleSeries.length === 0 ? (
+        <div className="text-slate-600 text-sm flex-1 flex items-center justify-center">
           No matches in this window.
         </div>
       ) : (
-        <div className="flex gap-4">
+        <div className="flex gap-4 flex-1 min-h-0">
           <div className="flex-1 min-w-0">
-            <ResponsiveContainer width="100%" height={320}>
+            <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 data={combinedData}
                 margin={{ top: 8, right: 16, bottom: 0, left: 0 }}
               >
                 <XAxis
                   type="number"
-                  dataKey="t"
-                  domain={domain}
-                  tickFormatter={formatTick}
+                  dataKey="idx"
+                  domain={[0, Math.max(0, dayKeys.length - 1)]}
+                  ticks={dayKeys.map((_, i) => i)}
+                  interval={tickInterval}
+                  tickFormatter={(idx: number) =>
+                    dayKeys[idx] ? formatDayLabel(dayKeys[idx]) : ''
+                  }
                   tick={{ fill: '#64748b', fontSize: 12 }}
                   axisLine={false}
                   tickLine={false}
-                  allowDuplicatedCategory={false}
                 />
                 <YAxis
                   domain={yDomain}
@@ -289,6 +304,8 @@ function EloHistoryChart({
                   cursor={{ stroke: '#475569', strokeDasharray: '3 3' }}
                   content={({ active, payload, label }) => {
                     if (!active || !payload?.length) return null;
+                    const idx = label as number;
+                    const day = dayKeys[idx];
                     const items = payload
                       .filter((it) => it.value != null)
                       .map((it) => {
@@ -304,14 +321,7 @@ function EloHistoryChart({
                     return (
                       <div className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs shadow-lg">
                         <div className="text-slate-300 font-medium mb-1.5">
-                          {new Date(label as number).toLocaleDateString(
-                            'en-US',
-                            {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                            },
-                          )}
+                          {day ? formatDayLabel(day) : ''}
                         </div>
                         {items.map((it) => (
                           <div
@@ -336,8 +346,8 @@ function EloHistoryChart({
                     );
                   }}
                 />
-                {visibleSeries.map((s, i) => {
-                  const color = colorFor(i, visibleSeries.length);
+                {visibleSeries.map((s) => {
+                  const color = colorById.get(s.id) ?? '#94a3b8';
                   const dimmed = hoveredId !== null && hoveredId !== s.id;
                   const highlighted = hoveredId === s.id;
                   return (
@@ -352,30 +362,39 @@ function EloHistoryChart({
                       dot={false}
                       activeDot={{ r: 4 }}
                       isAnimationActive={false}
+                      connectNulls
                     />
                   );
                 })}
               </LineChart>
             </ResponsiveContainer>
           </div>
-          <ul className="flex flex-col gap-0.5 py-1 text-xs select-none min-w-[80px]">
-            {visibleSeries.map((s, i) => {
-              const color = colorFor(i, visibleSeries.length);
-              const dimmed = hoveredId !== null && hoveredId !== s.id;
+          <ul className="flex flex-col gap-0.5 py-1 text-xs select-none min-w-[80px] overflow-y-auto">
+            {eligibleSeries.map((s) => {
+              const color = colorById.get(s.id) ?? '#94a3b8';
+              const hidden = hiddenIds.has(s.id);
+              const dimmed = !hidden && hoveredId !== null && hoveredId !== s.id;
               return (
                 <li
                   key={s.id}
-                  onMouseEnter={() => setHoveredId(s.id)}
+                  onClick={() => toggleHidden(s.id)}
+                  onMouseEnter={() => !hidden && setHoveredId(s.id)}
                   onMouseLeave={() => setHoveredId(null)}
                   className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer transition-opacity ${
-                    dimmed ? 'opacity-40' : ''
+                    hidden ? 'opacity-30' : dimmed ? 'opacity-40' : ''
                   } hover:bg-slate-700/40`}
+                  title={hidden ? 'Click to show' : 'Click to hide'}
                 >
                   <span
                     className="w-3 h-0.5 rounded"
                     style={{ backgroundColor: color }}
                   />
-                  <span style={{ color }}>{s.name}</span>
+                  <span
+                    style={{ color }}
+                    className={hidden ? 'line-through' : ''}
+                  >
+                    {s.name}
+                  </span>
                 </li>
               );
             })}
