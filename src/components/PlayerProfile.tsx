@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
 import { api } from '../lib/api';
-import { isUpset } from '../../lib/elo';
+import { isUpset, calculateExpectedScore } from '../../lib/elo';
 import {
   computeNemesis,
   computeRival,
   computeFriend,
 } from '../../lib/badges';
+import HoverTooltip from './Tooltip';
 import type { PlayerProfile as PlayerProfileType } from '../types';
 
 export default function PlayerProfile() {
@@ -38,6 +39,16 @@ export default function PlayerProfile() {
     player.wins + player.losses > 0
       ? Math.round((player.wins / (player.wins + player.losses)) * 100)
       : 0;
+
+  const sumEloChange = (count: number) =>
+    player.matches.slice(0, count).reduce(
+      (sum, m) =>
+        sum + (m.winnerId === player.id ? m.winnerEloChange : m.loserEloChange),
+      0,
+    );
+
+  const streakElo = player.streak ? sumEloChange(player.streak.count) : 0;
+  const recentFormElo = sumEloChange(player.recentForm.length);
 
   const opponentMap = new Map<number, string>();
   player.headToHead.forEach((h) => {
@@ -198,36 +209,52 @@ export default function PlayerProfile() {
         <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
           <h3 className="text-sm text-slate-400 mb-2">Current Streak</h3>
           {player.streak ? (
-            <span
-              className={`text-2xl font-bold ${player.streak.type === 'W' ? 'text-emerald-400' : 'text-red-400'}`}
-            >
-              {player.streak.count}
-              {player.streak.type}
-            </span>
+            <div className="flex items-baseline justify-between gap-2">
+              <span
+                className={`text-2xl font-bold ${player.streak.type === 'W' ? 'text-emerald-400' : 'text-red-400'}`}
+              >
+                {player.streak.count}
+                {player.streak.type}
+              </span>
+              <span
+                className={`text-sm font-mono tabular-nums ${streakElo >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+              >
+                {streakElo >= 0 ? '+' : ''}
+                {streakElo}
+              </span>
+            </div>
           ) : (
             <span className="text-slate-500">No matches</span>
           )}
         </div>
         <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
           <h3 className="text-sm text-slate-400 mb-2">Recent Form</h3>
-          <div className="flex gap-1">
-            {player.recentForm.length > 0 ? (
-              player.recentForm.map((result, i) => (
-                <span
-                  key={i}
-                  className={`w-8 h-8 rounded flex items-center justify-center text-sm font-bold ${
-                    result === 'W'
-                      ? 'bg-emerald-500/20 text-emerald-400'
-                      : 'bg-red-500/20 text-red-400'
-                  }`}
-                >
-                  {result}
-                </span>
-              ))
-            ) : (
-              <span className="text-slate-500">No matches</span>
-            )}
-          </div>
+          {player.recentForm.length > 0 ? (
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex gap-1">
+                {player.recentForm.map((result, i) => (
+                  <span
+                    key={i}
+                    className={`w-8 h-8 rounded flex items-center justify-center text-sm font-bold ${
+                      result === 'W'
+                        ? 'bg-emerald-500/20 text-emerald-400'
+                        : 'bg-red-500/20 text-red-400'
+                    }`}
+                  >
+                    {result}
+                  </span>
+                ))}
+              </div>
+              <span
+                className={`text-sm font-mono tabular-nums ${recentFormElo >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+              >
+                {recentFormElo >= 0 ? '+' : ''}
+                {recentFormElo}
+              </span>
+            </div>
+          ) : (
+            <span className="text-slate-500">No matches</span>
+          )}
         </div>
       </div>
 
@@ -270,6 +297,15 @@ export default function PlayerProfile() {
                   return sum + change;
                 }, 0);
 
+                const totalGames = h2h.wins + h2h.losses;
+                const actualPct =
+                  totalGames > 0
+                    ? Math.round((h2h.wins / totalGames) * 100)
+                    : 0;
+                const expectedPct = Math.round(
+                  calculateExpectedScore(player.elo, h2h.opponent.elo) * 100,
+                );
+
                 return (
                   <div key={h2h.opponent.id}>
                     <div
@@ -304,11 +340,46 @@ export default function PlayerProfile() {
                         </Link>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-sm">
-                          <span className="text-emerald-400">{h2h.wins}W</span>
-                          <span className="text-slate-600 mx-1">-</span>
-                          <span className="text-red-400">{h2h.losses}L</span>
-                        </span>
+                        <HoverTooltip
+                          content={
+                            <div className="space-y-1">
+                              <div>
+                                <span className="text-slate-500">Actual: </span>
+                                <span className="text-slate-200">
+                                  {actualPct}%
+                                </span>
+                                <span
+                                  className={`ml-1 font-mono ${
+                                    actualPct - expectedPct > 0
+                                      ? 'text-emerald-400'
+                                      : actualPct - expectedPct < 0
+                                        ? 'text-red-400'
+                                        : 'text-slate-500'
+                                  }`}
+                                >
+                                  ({actualPct - expectedPct >= 0 ? '+' : ''}
+                                  {actualPct - expectedPct}%)
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500">
+                                  Expected:{' '}
+                                </span>
+                                <span className="text-slate-200">
+                                  {expectedPct}%
+                                </span>
+                              </div>
+                            </div>
+                          }
+                        >
+                          <span className="text-sm cursor-help">
+                            <span className="text-emerald-400">
+                              {h2h.wins}W
+                            </span>
+                            <span className="text-slate-600 mx-1">-</span>
+                            <span className="text-red-400">{h2h.losses}L</span>
+                          </span>
+                        </HoverTooltip>
                         <span className="text-slate-700">|</span>
                         <span className={`text-xs font-mono tabular-nums ${netElo >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                           {netElo >= 0 ? '+' : ''}{netElo}
