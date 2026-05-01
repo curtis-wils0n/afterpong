@@ -431,6 +431,11 @@ export default function PlayerProfile() {
                                         : `${match.loserScore}-${match.winnerScore}`}
                                     </span>
                                   ) : null}
+                                {match.tournamentMatchId != null && (
+                                  <span className="text-amber-400 text-xs font-medium px-1.5 py-0.5 bg-amber-400/10 rounded-full">
+                                    TOURNAMENT
+                                  </span>
+                                )}
                                 {match.isChallenge && (
                                   <span className="text-purple-400 text-xs font-medium px-1.5 py-0.5 bg-purple-400/10 rounded-full">
                                     CHALLENGE
@@ -521,6 +526,11 @@ export default function PlayerProfile() {
                         ) : null}
                     </div>
                     <div className="flex items-center gap-2">
+                      {match.tournamentMatchId != null && (
+                        <span className="text-amber-400 text-xs font-medium px-2 py-0.5 bg-amber-400/10 rounded-full">
+                          TOURNAMENT
+                        </span>
+                      )}
                       {match.isChallenge && (
                         <span className="text-purple-400 text-xs font-medium px-2 py-0.5 bg-purple-400/10 rounded-full">
                           CHALLENGE

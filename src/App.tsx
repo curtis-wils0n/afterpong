@@ -7,6 +7,8 @@ import MatchHistory from './components/MatchHistory';
 import ChallengeBoard from './components/ChallengeBoard';
 import PlayerProfile from './components/PlayerProfile';
 import Stats from './components/Stats';
+import Tournaments from './components/Tournaments';
+import TournamentDetail from './components/TournamentDetail';
 
 export default function App() {
   const { isAuthenticated, loading } = useAuth();
@@ -35,6 +37,8 @@ export default function App() {
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/matches" element={<MatchHistory />} />
         <Route path="/stats" element={<Stats />} />
+        <Route path="/tournaments" element={<Tournaments />} />
+        <Route path="/tournaments/:id" element={<TournamentDetail />} />
         <Route path="/players/:id" element={<PlayerProfile />} />
         <Route path="/login" element={<Navigate to="/" replace />} />
       </Routes>

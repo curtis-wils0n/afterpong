@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { db } from '../../db/index.js';
-import { players, matches } from '../../db/schema.js';
-import { eq, desc, inArray, and, or, sql } from 'drizzle-orm';
-import { calculateEloChange } from '../../lib/elo.js';
+import { players, matches, tournamentMatches, tournaments } from '../../db/schema.js';
+import { eq, desc, inArray, and, or, sql, type SQL } from 'drizzle-orm';
 import { requireAuth, requireAdmin } from '../_lib/auth.js';
+import { createMatch } from '../_lib/matchService.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'DELETE') {
@@ -27,7 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .filter(n => Number.isFinite(n) && n > 0)
       .slice(0, 2);
 
-    let whereClause = undefined;
+    let whereClause: SQL<unknown> | undefined = undefined;
     if (filterIds.length === 1) {
       const [a] = filterIds;
       whereClause = or(eq(matches.winnerId, a), eq(matches.loserId, a));
@@ -78,102 +78,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'POST') {
     const { winnerId, loserId, winnerScore, loserScore, isChallenge, games } = req.body;
 
-    if (!winnerId || !loserId) {
-      return res.status(400).json({ error: 'Winner and loser are required' });
-    }
-    if (winnerId === loserId) {
-      return res.status(400).json({ error: 'Winner and loser must be different players' });
-    }
-
-    const [winner] = await db.select().from(players).where(eq(players.id, winnerId));
-    const [loser] = await db.select().from(players).where(eq(players.id, loserId));
-
-    if (!winner || !loser) {
-      return res.status(404).json({ error: 'Player not found' });
-    }
-
-    // Validate challenge match rules
-    if (isChallenge) {
-      if (winner.challengeRank == null || loser.challengeRank == null) {
-        return res.status(400).json({ error: 'Both players must have a challenge rank' });
-      }
-      const higherRanked = winner.challengeRank < loser.challengeRank ? winner : loser;
-      const lowerRanked = winner.challengeRank < loser.challengeRank ? loser : winner;
-      const rankDiff = lowerRanked.challengeRank! - higherRanked.challengeRank!;
-      if (rankDiff < 1 || rankDiff > 2) {
-        return res.status(400).json({
-          error: 'Challenge matches can only be between players within 2 ranks of each other',
-        });
-      }
-    }
-
-    // Validate games array if provided
-    let validatedGames: { winnerScore: number; loserScore: number }[] | null = null;
-    let seriesWinnerScore: number | null = winnerScore ?? null;
-    let seriesLoserScore: number | null = loserScore ?? null;
-
-    if (Array.isArray(games) && games.length > 0) {
-      for (const g of games) {
-        if (typeof g.winnerScore !== 'number' || typeof g.loserScore !== 'number' ||
-            g.winnerScore < 0 || g.loserScore < 0) {
-          return res.status(400).json({ error: 'Invalid game scores' });
-        }
-      }
-
-      const gamesWonByWinner = games.filter((g: { winnerScore: number; loserScore: number }) => g.winnerScore > g.loserScore).length;
-      const gamesWonByLoser = games.length - gamesWonByWinner;
-
-      if (gamesWonByWinner <= gamesWonByLoser) {
-        return res.status(400).json({ error: 'Winner must have won more games' });
-      }
-
-      validatedGames = games;
-      seriesWinnerScore = gamesWonByWinner;
-      seriesLoserScore = gamesWonByLoser;
-    }
-
-    const { winnerChange, loserChange } = calculateEloChange(winner.elo, loser.elo);
-
-    // Insert match with pre-match ranks
-    const [match] = await db.insert(matches).values({
+    const result = await createMatch({
       winnerId,
       loserId,
-      winnerScore: seriesWinnerScore,
-      loserScore: seriesLoserScore,
-      winnerEloChange: winnerChange,
-      loserEloChange: loserChange,
-      isChallenge: !!isChallenge,
-      games: validatedGames,
-      winnerRankBefore: winner.challengeRank,
-      loserRankBefore: loser.challengeRank,
-    }).returning();
+      winnerScore,
+      loserScore,
+      isChallenge,
+      games,
+    });
 
-    // Update ELO
-    await Promise.all([
-      db.update(players).set({ elo: winner.elo + winnerChange }).where(eq(players.id, winnerId)),
-      db.update(players).set({ elo: loser.elo + loserChange }).where(eq(players.id, loserId)),
-    ]);
-
-    // Handle challenge rank swap if lower-ranked player won
-    if (isChallenge && winner.challengeRank != null && loser.challengeRank != null) {
-      const winnerIsLowerRanked = winner.challengeRank > loser.challengeRank;
-      if (winnerIsLowerRanked) {
-        // Simple swap — only the two players exchange ranks
-        await Promise.all([
-          db.update(players)
-            .set({ challengeRank: loser.challengeRank })
-            .where(eq(players.id, winner.id)),
-          db.update(players)
-            .set({ challengeRank: winner.challengeRank })
-            .where(eq(players.id, loser.id)),
-        ]);
-      }
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error });
     }
 
+    const [winnerRow] = await db.select().from(players).where(eq(players.id, result.winner.id));
+    const [loserRow] = await db.select().from(players).where(eq(players.id, result.loser.id));
+
     return res.status(201).json({
-      ...match,
-      winner: { ...winner, elo: winner.elo + winnerChange },
-      loser: { ...loser, elo: loser.elo + loserChange },
+      ...result.match,
+      winner: winnerRow,
+      loser: loserRow,
     });
   }
 
@@ -194,6 +118,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!winner || !loser) {
       return res.status(500).json({ error: 'Player not found' });
+    }
+
+    // If this match is part of a tournament, check that the next round hasn't been played.
+    let tournamentMatch: typeof tournamentMatches.$inferSelect | undefined;
+    let nextRoundMatch: typeof tournamentMatches.$inferSelect | undefined;
+    if (latest.tournamentMatchId != null) {
+      [tournamentMatch] = await db
+        .select()
+        .from(tournamentMatches)
+        .where(eq(tournamentMatches.id, latest.tournamentMatchId));
+
+      if (tournamentMatch) {
+        // Find next-round match (round + 1, position floor(position/2))
+        const [next] = await db
+          .select()
+          .from(tournamentMatches)
+          .where(
+            and(
+              eq(tournamentMatches.tournamentId, tournamentMatch.tournamentId),
+              eq(tournamentMatches.round, tournamentMatch.round + 1),
+              eq(tournamentMatches.position, Math.floor(tournamentMatch.position / 2)),
+            ),
+          );
+        nextRoundMatch = next;
+        if (nextRoundMatch && nextRoundMatch.matchId != null) {
+          return res.status(400).json({
+            error:
+              'Cannot undo this tournament match — the next round has already been played. Undo that match first.',
+          });
+        }
+      }
     }
 
     // Revert ELO
@@ -222,6 +177,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .set({ challengeRank: latest.loserRankBefore })
           .where(eq(players.id, loser.id)),
       ]);
+    }
+
+    // Revert tournament bracket advancement
+    if (tournamentMatch) {
+      // Clear the played match link on the tournament match
+      await db
+        .update(tournamentMatches)
+        .set({ matchId: null, winnerId: null })
+        .where(eq(tournamentMatches.id, tournamentMatch.id));
+
+      // If the winner had advanced to the next round, clear that slot
+      if (nextRoundMatch && tournamentMatch.winnerId != null) {
+        const advancedAsP1 = nextRoundMatch.player1Id === tournamentMatch.winnerId;
+        const advancedAsP2 = nextRoundMatch.player2Id === tournamentMatch.winnerId;
+        if (advancedAsP1) {
+          await db
+            .update(tournamentMatches)
+            .set({ player1Id: null })
+            .where(eq(tournamentMatches.id, nextRoundMatch.id));
+        } else if (advancedAsP2) {
+          await db
+            .update(tournamentMatches)
+            .set({ player2Id: null })
+            .where(eq(tournamentMatches.id, nextRoundMatch.id));
+        }
+      }
+
+      // If this was the final and the tournament was completed, revert it to active
+      if (!nextRoundMatch) {
+        await db
+          .update(tournaments)
+          .set({ status: 'active', winnerId: null, completedAt: null })
+          .where(eq(tournaments.id, tournamentMatch.tournamentId));
+      }
     }
 
     // Delete the match

@@ -6,6 +6,7 @@ const navItems = [
   { path: '/leaderboard', label: 'Leaderboard' },
   { path: '/matches', label: 'Matches' },
   { path: '/stats', label: 'Stats' },
+  { path: '/tournaments', label: 'Tournaments' },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {

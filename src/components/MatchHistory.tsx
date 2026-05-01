@@ -179,6 +179,11 @@ export default function MatchHistory() {
                     ) : null}
                   </div>
                   <div className="flex items-center gap-3 text-sm shrink-0 ml-3">
+                    {match.tournamentMatchId != null && (
+                      <span className="text-amber-400 text-xs font-medium px-2 py-0.5 bg-amber-400/10 rounded-full">
+                        TOURNAMENT
+                      </span>
+                    )}
                     {match.isChallenge && (
                       <span className="text-purple-400 text-xs font-medium px-2 py-0.5 bg-purple-400/10 rounded-full">
                         CHALLENGE

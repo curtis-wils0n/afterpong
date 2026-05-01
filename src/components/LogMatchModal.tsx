@@ -6,6 +6,9 @@ interface Props {
   players: Player[];
   isChallenge?: boolean;
   preselectedPlayers?: { challengerId: number; targetId: number };
+  // When set, route the submission through the tournament logging endpoint.
+  tournamentId?: number;
+  tournamentMatchId?: number;
   onClose: () => void;
   onLogged: () => void;
 }
@@ -14,6 +17,8 @@ export default function LogMatchModal({
   players,
   isChallenge: defaultIsChallenge = false,
   preselectedPlayers,
+  tournamentId,
+  tournamentMatchId,
   onClose,
   onLogged,
 }: Props) {
@@ -26,7 +31,11 @@ export default function LogMatchModal({
   const [gameScores, setGameScores] = useState([
     { player1Score: '', player2Score: '' },
   ]);
-  const [isChallenge, setIsChallenge] = useState(defaultIsChallenge);
+  const isTournament = tournamentMatchId != null;
+  // Tournament matches are never challenge matches.
+  const [isChallenge, setIsChallenge] = useState(
+    isTournament ? false : defaultIsChallenge,
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -126,12 +135,17 @@ export default function LogMatchModal({
         }
       });
 
-      await api.matches.create({
+      const payload = {
         winnerId: Number(winnerId),
         loserId: Number(loserId),
         isChallenge,
         games,
-      });
+      };
+      if (tournamentId != null && tournamentMatchId != null) {
+        await api.tournaments.logMatch(tournamentId, tournamentMatchId, payload);
+      } else {
+        await api.matches.create(payload);
+      }
       onLogged();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to log match');
@@ -162,7 +176,8 @@ export default function LogMatchModal({
                 onChange={(e) =>
                   setPlayer1Id(e.target.value ? Number(e.target.value) : '')
                 }
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
+                disabled={!!preselectedPlayers}
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 <option value="">Select...</option>
                 {availablePlayers.map((p) => (
@@ -181,7 +196,8 @@ export default function LogMatchModal({
                 onChange={(e) =>
                   setPlayer2Id(e.target.value ? Number(e.target.value) : '')
                 }
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
+                disabled={!!preselectedPlayers}
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 <option value="">Select...</option>
                 {availablePlayers
@@ -321,7 +337,11 @@ export default function LogMatchModal({
             </div>
           )}
 
-          {!preselectedPlayers ? (
+          {isTournament ? (
+            <div className="text-xs text-amber-400 bg-amber-400/10 border border-amber-500/30 rounded-lg px-3 py-2">
+              Tournament match — winner advances to the next round.
+            </div>
+          ) : !preselectedPlayers ? (
             <button
               type="button"
               onClick={() => setIsChallenge(!isChallenge)}

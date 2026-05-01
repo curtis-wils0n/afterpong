@@ -1,9 +1,11 @@
 node_modules
 dist
 .env
-.env.local
+.env.*
+!.env.example
 .vercel
 drizzle/
 .agents/
 .claude/
 skills-lock.json
+tsconfig.tsbuildinfo

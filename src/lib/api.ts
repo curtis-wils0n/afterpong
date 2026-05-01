@@ -1,4 +1,13 @@
-import type { Player, Match, MatchListResponse, PlayerProfile, StatsResponse } from '../types';
+import type {
+  Player,
+  Match,
+  MatchListResponse,
+  PlayerProfile,
+  StatsResponse,
+  Tournament,
+  TournamentDetail,
+  TournamentSeeding,
+} from '../types';
 
 const API_BASE = '/api';
 
@@ -70,5 +79,39 @@ export const api = {
   },
   stats: {
     get: () => fetchJSON<StatsResponse>('/stats'),
+  },
+  tournaments: {
+    list: () => fetchJSON<Tournament[]>('/tournaments'),
+    get: (id: number) => fetchJSON<TournamentDetail>(`/tournaments/${id}`),
+    create: (data: {
+      name: string;
+      seeding: TournamentSeeding;
+      playerIds: number[];
+    }) =>
+      fetchJSON<{ tournamentId: number }>('/tournaments', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    delete: (id: number) =>
+      fetchJSON<{ ok: true }>(`/tournaments/${id}`, { method: 'DELETE' }),
+    logMatch: (
+      tournamentId: number,
+      tournamentMatchId: number,
+      data: {
+        winnerId: number;
+        loserId: number;
+        winnerScore?: number;
+        loserScore?: number;
+        isChallenge?: boolean;
+        games?: { winnerScore: number; loserScore: number }[];
+      },
+    ) =>
+      fetchJSON<Match>(
+        `/tournaments/${tournamentId}/matches/${tournamentMatchId}`,
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+      ),
   },
 };

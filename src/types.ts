@@ -25,9 +25,52 @@ export interface Match {
   loserEloChange: number;
   isChallenge: boolean;
   games: GameScore[] | null;
+  tournamentMatchId: number | null;
   createdAt: string;
   winner?: Player;
   loser?: Player;
+}
+
+export type TournamentSeeding = 'snake' | 'random';
+export type TournamentStatus = 'active' | 'completed';
+
+export interface Tournament {
+  id: number;
+  name: string;
+  seeding: TournamentSeeding;
+  status: TournamentStatus;
+  winnerId: number | null;
+  createdAt: string;
+  completedAt: string | null;
+  winner?: Player | null;
+}
+
+export interface TournamentParticipant {
+  id: number;
+  tournamentId: number;
+  playerId: number;
+  seed: number;
+  player?: Player | null;
+}
+
+export interface TournamentMatch {
+  id: number;
+  tournamentId: number;
+  round: number;
+  position: number;
+  player1Id: number | null;
+  player2Id: number | null;
+  matchId: number | null;
+  winnerId: number | null;
+  createdAt: string;
+  player1?: Player | null;
+  player2?: Player | null;
+  match?: Match | null;
+}
+
+export interface TournamentDetail extends Tournament {
+  participants: TournamentParticipant[];
+  matches: TournamentMatch[];
 }
 
 export interface MatchListResponse {
