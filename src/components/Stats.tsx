@@ -169,6 +169,9 @@ function EloHistoryChart({
   // Per-player series: one point per local day where they actually played
   // (drop the synthetic createdAt point — it's not a game day). Days with
   // no games never enter the data, so the X axis collapses dead stretches.
+  // For windowed views, also anchor each player at the window start with
+  // their pre-window ELO so lines span the full timeframe instead of
+  // starting at the first in-window match.
   const series = useMemo(() => {
     const opt = WINDOW_OPTIONS.find((o) => o.key === windowKey)!;
     const now = Date.now();
@@ -179,12 +182,26 @@ function EloHistoryChart({
       // p.points[0] is the synthetic { createdAt, 1000 } from the API.
       const matchPts = p.points.slice(1);
       const byDay = new Map<string, { day: string; t: number; elo: number }>();
+      let preWindowElo: number | null = null;
       for (const pt of matchPts) {
         const t = new Date(pt.t).getTime();
-        if (windowStart != null && t < windowStart) continue;
+        if (windowStart != null && t < windowStart) {
+          preWindowElo = pt.elo;
+          continue;
+        }
         const day = localDayKey(t);
         const prev = byDay.get(day);
         if (!prev || prev.t <= t) byDay.set(day, { day, t, elo: pt.elo });
+      }
+      if (windowStart != null && preWindowElo != null) {
+        const anchorDay = localDayKey(windowStart);
+        if (!byDay.has(anchorDay)) {
+          byDay.set(anchorDay, {
+            day: anchorDay,
+            t: windowStart,
+            elo: preWindowElo,
+          });
+        }
       }
       const data = [...byDay.values()].sort((a, b) => a.t - b.t);
       return { ...p, data };
