@@ -102,6 +102,7 @@ export interface StatsResponse {
   };
   players: {
     peakElo: { players: PlayerRef[]; elo: number } | null;
+    currentTopElo: { players: PlayerRef[]; elo: number } | null;
     biggestClimber: {
       player: PlayerRef;
       climb: number;
@@ -110,6 +111,20 @@ export interface StatsResponse {
     } | null;
     biggestFaller: {
       player: PlayerRef;
+      fall: number;
+      from: number;
+      to: number;
+    } | null;
+    biggestDailyClimber: {
+      player: PlayerRef;
+      day: string;
+      climb: number;
+      from: number;
+      to: number;
+    } | null;
+    biggestDailyFaller: {
+      player: PlayerRef;
+      day: string;
       fall: number;
       from: number;
       to: number;

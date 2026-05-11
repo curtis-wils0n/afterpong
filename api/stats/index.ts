@@ -48,6 +48,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const acc = new Map<number, PlayerAcc>();
   const eloHistory = new Map<number, { t: string; elo: number }[]>();
+  // Per-player daily start/end ELO, keyed by UTC day (YYYY-MM-DD). Updated as
+  // matches are processed in chronological order, so endElo lands on the last
+  // match of the day.
+  type DailyAcc = { day: string; startElo: number; endElo: number };
+  const dailyByPlayer = new Map<number, Map<string, DailyAcc>>();
   for (const p of allPlayers) {
     acc.set(p.id, {
       currentElo: 1000,
@@ -80,12 +85,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!winner || !loser) continue;
 
     // Update ELO
+    const winnerEloBefore = winner.currentElo;
+    const loserEloBefore = loser.currentElo;
     winner.currentElo += m.winnerEloChange;
     loser.currentElo += m.loserEloChange;
 
     const ts = m.createdAt.toISOString();
     eloHistory.get(m.winnerId)!.push({ t: ts, elo: winner.currentElo });
     eloHistory.get(m.loserId)!.push({ t: ts, elo: loser.currentElo });
+
+    // Daily start/end ELO buckets (UTC day)
+    const utcDay = ts.slice(0, 10);
+    for (const [pid, before, after] of [
+      [m.winnerId, winnerEloBefore, winner.currentElo],
+      [m.loserId, loserEloBefore, loser.currentElo],
+    ] as const) {
+      let dayMap = dailyByPlayer.get(pid);
+      if (!dayMap) {
+        dayMap = new Map();
+        dailyByPlayer.set(pid, dayMap);
+      }
+      const existing = dayMap.get(utcDay);
+      if (!existing) {
+        dayMap.set(utcDay, { day: utcDay, startElo: before, endElo: after });
+      } else {
+        existing.endElo = after;
+      }
+    }
 
     // Track peak and min
     if (winner.currentElo > winner.peakElo) {
@@ -258,6 +284,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const biggestOp = pickAllMax(playerList, (p) => rivalCounts.get(p.id) ?? 0);
   const bestDefender = pickAllMax(playerList, (p) => acc.get(p.id)!.defenses);
   const peak = pickAllMax(playerList, (p) => acc.get(p.id)!.peakElo);
+  const currentTop = pickAllMax(playerList, (p) => acc.get(p.id)!.currentElo);
   const climber = pickMax(playerList, (p) => {
     const a = acc.get(p.id)!;
     return a.currentElo - a.minElo;
@@ -266,6 +293,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const a = acc.get(p.id)!;
     return a.peakElo - a.currentElo;
   });
+
+  let biggestDailyClimber:
+    | { player: PlayerRef; day: string; climb: number; from: number; to: number }
+    | null = null;
+  let biggestDailyFaller:
+    | { player: PlayerRef; day: string; fall: number; from: number; to: number }
+    | null = null;
+  for (const [pid, days] of dailyByPlayer) {
+    for (const d of days.values()) {
+      const delta = d.endElo - d.startElo;
+      if (delta > 0) {
+        if (!biggestDailyClimber || delta > biggestDailyClimber.climb) {
+          biggestDailyClimber = {
+            player: getRef(pid),
+            day: d.day,
+            climb: delta,
+            from: d.startElo,
+            to: d.endElo,
+          };
+        }
+      } else if (delta < 0) {
+        const fall = -delta;
+        if (!biggestDailyFaller || fall > biggestDailyFaller.fall) {
+          biggestDailyFaller = {
+            player: getRef(pid),
+            day: d.day,
+            fall,
+            from: d.startElo,
+            to: d.endElo,
+          };
+        }
+      }
+    }
+  }
 
   // Biggest rivalry and dominator
   let biggestRivalry:
@@ -337,6 +398,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               elo: peak.score,
             }
           : null,
+      currentTopElo:
+        currentTop && currentTop.score > 1000
+          ? {
+              players: currentTop.players,
+              elo: currentTop.score,
+            }
+          : null,
       biggestClimber:
         climber && climber.score > 0
           ? {
@@ -355,6 +423,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               to: acc.get(faller.value.id)!.currentElo,
             }
           : null,
+      biggestDailyClimber,
+      biggestDailyFaller,
     },
     ladder: {
       mostSuccessfulClimbs: wrapCount(mostClimbs),

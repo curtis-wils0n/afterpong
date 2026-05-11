@@ -90,10 +90,15 @@ function NoData({ label, tooltip }: { label: string; tooltip?: string }) {
 
 const TIPS = {
   peakElo: 'Highest ELO anyone has ever reached',
+  currentTopElo: 'Highest ELO of any active player right now',
   biggestClimber:
     'Largest gap between a player’s lowest ever ELO and their current ELO',
   biggestFaller:
     'Largest gap between a player’s peak ELO and their current ELO',
+  biggestDailyClimber:
+    'Largest net ELO gained by any player on a single day',
+  biggestDailyFaller:
+    'Largest net ELO lost by any player on a single day',
   currentWinStreak: 'Longest active streak of consecutive wins',
   longestWinStreak: 'Longest streak of consecutive wins ever recorded',
   currentLossStreak: 'Longest active streak of consecutive losses',
@@ -119,6 +124,15 @@ const TIPS = {
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function formatDay(dayKey: string) {
+  const [y, m, d] = dayKey.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -459,14 +473,14 @@ export default function Stats() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {stats.players.peakElo ? (
           <StatCard
-            label="Peak ELO"
+            label="All-Time Peak ELO"
             value={String(stats.players.peakElo.elo)}
             tooltip={TIPS.peakElo}
           >
             <PlayerLinks players={stats.players.peakElo.players} />
           </StatCard>
         ) : (
-          <NoData label="Peak ELO" tooltip={TIPS.peakElo} />
+          <NoData label="All-Time Peak ELO" tooltip={TIPS.peakElo} />
         )}
 
         {stats.players.biggestClimber ? (
@@ -503,6 +517,62 @@ export default function Stats() {
           </StatCard>
         ) : (
           <NoData label="Biggest Fall" tooltip={TIPS.biggestFaller} />
+        )}
+
+        {stats.players.currentTopElo ? (
+          <StatCard
+            label="Current Top ELO"
+            value={String(stats.players.currentTopElo.elo)}
+            tooltip={TIPS.currentTopElo}
+          >
+            <PlayerLinks players={stats.players.currentTopElo.players} />
+          </StatCard>
+        ) : (
+          <NoData label="Current Top ELO" tooltip={TIPS.currentTopElo} />
+        )}
+
+        {stats.players.biggestDailyClimber ? (
+          <StatCard
+            label="Biggest Single-Day Climb"
+            value={`+${stats.players.biggestDailyClimber.climb}`}
+            valueClass="text-emerald-400"
+            tooltip={TIPS.biggestDailyClimber}
+          >
+            <PlayerLink player={stats.players.biggestDailyClimber.player} />
+            <span className="text-slate-600">
+              {' '}
+              · {stats.players.biggestDailyClimber.from} →{' '}
+              {stats.players.biggestDailyClimber.to} ·{' '}
+              {formatDay(stats.players.biggestDailyClimber.day)}
+            </span>
+          </StatCard>
+        ) : (
+          <NoData
+            label="Biggest Single-Day Climb"
+            tooltip={TIPS.biggestDailyClimber}
+          />
+        )}
+
+        {stats.players.biggestDailyFaller ? (
+          <StatCard
+            label="Biggest Single-Day Fall"
+            value={`-${stats.players.biggestDailyFaller.fall}`}
+            valueClass="text-red-400"
+            tooltip={TIPS.biggestDailyFaller}
+          >
+            <PlayerLink player={stats.players.biggestDailyFaller.player} />
+            <span className="text-slate-600">
+              {' '}
+              · {stats.players.biggestDailyFaller.from} →{' '}
+              {stats.players.biggestDailyFaller.to} ·{' '}
+              {formatDay(stats.players.biggestDailyFaller.day)}
+            </span>
+          </StatCard>
+        ) : (
+          <NoData
+            label="Biggest Single-Day Fall"
+            tooltip={TIPS.biggestDailyFaller}
+          />
         )}
       </div>
 
