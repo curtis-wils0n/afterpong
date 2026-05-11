@@ -47,12 +47,23 @@ export default function ChallengeBoard() {
   };
 
   const getValidTargets = (player: Player): number[] => {
+    if (player.onVacation) return [];
     if (player.challengeRank == null || player.challengeRank <= 1) return [];
     const targets: number[] = [];
     for (const other of players) {
+      if (other.id === player.id) continue;
+      if (other.onVacation) continue;
       if (other.challengeRank == null) continue;
-      const diff = player.challengeRank - other.challengeRank;
-      if (diff >= 1 && diff <= 2) {
+      if (other.challengeRank >= player.challengeRank) continue;
+      // Count active players strictly between the two ranks.
+      const between = players.filter(
+        (p) =>
+          !p.onVacation &&
+          p.challengeRank != null &&
+          p.challengeRank > other.challengeRank! &&
+          p.challengeRank < player.challengeRank!,
+      ).length;
+      if (between <= 1) {
         targets.push(other.id);
       }
     }
@@ -61,6 +72,18 @@ export default function ChallengeBoard() {
 
   const selectedPlayer = players.find((p) => p.id === selectedChallenger);
   const validTargets = selectedPlayer ? getValidTargets(selectedPlayer) : [];
+
+  // A player can challenge if there's at least one active player ranked above them.
+  const canChallengeUp = (player: Player): boolean => {
+    if (player.onVacation) return false;
+    if (player.challengeRank == null) return false;
+    return players.some(
+      (p) =>
+        !p.onVacation &&
+        p.challengeRank != null &&
+        p.challengeRank < player.challengeRank!,
+    );
+  };
 
   return (
     <div>
@@ -120,20 +143,23 @@ export default function ChallengeBoard() {
           {players.map((player) => {
             const isSelected = selectedChallenger === player.id;
             const isValidTarget = validTargets.includes(player.id);
-            const canChallenge =
-              player.challengeRank != null && player.challengeRank > 1;
+            const canChallenge = canChallengeUp(player);
+            const isVacation = player.onVacation;
 
             return (
               <div key={player.id} className="flex items-center gap-2">
                 <div
                   className={`flex-1 flex items-center gap-4 rounded-lg px-4 py-3 border transition-colors ${
-                    isSelected
-                      ? 'bg-emerald-500/10 border-emerald-500/50'
-                      : isValidTarget
-                        ? 'bg-emerald-500/5 border-emerald-500/30 cursor-pointer hover:bg-emerald-500/15'
-                        : 'bg-slate-800 border-slate-700'
+                    isVacation
+                      ? 'bg-slate-800/40 border-slate-700/50 opacity-50'
+                      : isSelected
+                        ? 'bg-emerald-500/10 border-emerald-500/50'
+                        : isValidTarget
+                          ? 'bg-emerald-500/5 border-emerald-500/30 cursor-pointer hover:bg-emerald-500/15'
+                          : 'bg-slate-800 border-slate-700'
                   }`}
                   onClick={() => {
+                    if (isVacation) return;
                     if (isValidTarget) {
                       setChallengeMatch({
                         challengerId: selectedChallenger!,
@@ -167,10 +193,15 @@ export default function ChallengeBoard() {
                   </span>
                   <Link
                     to={`/players/${player.id}`}
-                    className="flex-1 font-medium hover:text-emerald-400 transition-colors"
+                    className="flex-1 font-medium hover:text-emerald-400 transition-colors flex items-center gap-2"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {player.name}
+                    <span>{player.name}</span>
+                    {isVacation && (
+                      <span className="text-sky-400 text-[10px] font-medium px-1.5 py-0.5 bg-sky-400/10 rounded-full">
+                        VACATION
+                      </span>
+                    )}
                   </Link>
                   <div className="w-20 shrink-0 flex justify-end gap-0.5">
                     {player.defenses != null && player.defenses > 0 &&
@@ -189,7 +220,7 @@ export default function ChallengeBoard() {
                   </span>
                 </div>
                 <div className="w-24 shrink-0 flex justify-end">
-                  {!selectedChallenger && canChallenge && (
+                  {!selectedChallenger && canChallenge && !isVacation && (
                     <button
                       onClick={() => setSelectedChallenger(player.id)}
                       className="text-xs text-slate-500 hover:text-emerald-400 transition-colors px-2 py-1 rounded hover:bg-slate-700"

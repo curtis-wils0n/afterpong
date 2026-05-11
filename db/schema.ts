@@ -5,6 +5,7 @@ export const players = pgTable('players', {
   name: varchar('name', { length: 100 }).notNull().unique(),
   elo: integer('elo').notNull().default(1000),
   challengeRank: integer('challenge_rank'),
+  onVacation: boolean('on_vacation').notNull().default(false),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

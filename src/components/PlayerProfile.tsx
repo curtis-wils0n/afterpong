@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { isUpset, calculateExpectedScore } from '../../lib/elo';
 import {
   computeNemesis,
@@ -13,9 +14,11 @@ import type { PlayerProfile as PlayerProfileType } from '../types';
 
 export default function PlayerProfile() {
   const { id } = useParams<{ id: string }>();
+  const { isAdmin } = useAuth();
   const [player, setPlayer] = useState<PlayerProfileType | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedH2H, setExpandedH2H] = useState<number | null>(null);
+  const [updatingVacation, setUpdatingVacation] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -25,6 +28,19 @@ export default function PlayerProfile() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [id]);
+
+  const handleToggleVacation = async () => {
+    if (!player || updatingVacation) return;
+    setUpdatingVacation(true);
+    try {
+      const updated = await api.players.setVacation(player.id, !player.onVacation);
+      setPlayer({ ...player, onVacation: updated.onVacation });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update vacation status');
+    } finally {
+      setUpdatingVacation(false);
+    }
+  };
 
   if (loading)
     return (
@@ -110,7 +126,14 @@ export default function PlayerProfile() {
       <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold">{player.name}</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-2xl font-bold">{player.name}</h1>
+              {player.onVacation && (
+                <span className="text-sky-400 text-xs font-medium px-2 py-0.5 bg-sky-400/10 rounded-full">
+                  ON VACATION
+                </span>
+              )}
+            </div>
             {player.challengeRank != null && (
               <span className="text-sm text-slate-400">
                 Ladder Rank #{player.challengeRank}
@@ -128,6 +151,33 @@ export default function PlayerProfile() {
             )}
           </div>
         </div>
+        {(isAdmin || player.onVacation) && (
+          <div className="mb-4">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={handleToggleVacation}
+                disabled={updatingVacation}
+                className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 ${
+                  player.onVacation
+                    ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/20'
+                    : 'bg-slate-700/50 border-slate-600 text-slate-300 hover:border-slate-500'
+                }`}
+              >
+                {updatingVacation
+                  ? 'Updating...'
+                  : player.onVacation
+                    ? 'Back from vacation'
+                    : 'Set on vacation'}
+              </button>
+            )}
+            {player.onVacation && (
+              <p className="text-xs text-slate-500 mt-1">
+                Hidden from new matches. Ladder position is held until they return.
+              </p>
+            )}
+          </div>
+        )}
         <div className="grid grid-cols-4 gap-4 text-center">
           <div>
             <div className="text-2xl font-bold">
