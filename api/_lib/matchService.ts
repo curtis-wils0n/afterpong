@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, and, gt, lt } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { players, matches } from '../../db/schema.js';
 import { calculateEloChange } from '../../lib/elo.js';
@@ -53,6 +53,15 @@ export async function createMatch(
     return { ok: false, status: 404, error: 'Player not found' };
   }
 
+  // Tournament matches are allowed to ignore vacation status (bracket is already set).
+  if (tournamentMatchId == null && (winner.onVacation || loser.onVacation)) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'Cannot log a match involving a player on vacation',
+    };
+  }
+
   if (isChallenge) {
     if (winner.challengeRank == null || loser.challengeRank == null) {
       return {
@@ -65,13 +74,24 @@ export async function createMatch(
       winner.challengeRank < loser.challengeRank ? winner : loser;
     const lowerRanked =
       winner.challengeRank < loser.challengeRank ? loser : winner;
-    const rankDiff = lowerRanked.challengeRank! - higherRanked.challengeRank!;
-    if (rankDiff < 1 || rankDiff > 2) {
+    // Count non-vacationing players strictly between the two ranks; vacationers
+    // are transparent so people below can challenge "past" them.
+    const between = await db
+      .select({ id: players.id })
+      .from(players)
+      .where(
+        and(
+          gt(players.challengeRank, higherRanked.challengeRank!),
+          lt(players.challengeRank, lowerRanked.challengeRank!),
+          eq(players.onVacation, false),
+        ),
+      );
+    if (between.length > 1) {
       return {
         ok: false,
         status: 400,
         error:
-          'Challenge matches can only be between players within 2 ranks of each other',
+          'Challenge matches can only be between players within 2 active ranks of each other',
       };
     }
   }

@@ -2,14 +2,31 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { db } from '../../db/index.js';
 import { players, matches } from '../../db/schema.js';
 import { eq, or, desc, inArray } from 'drizzle-orm';
-import { requireAuth } from '../_lib/auth.js';
+import { requireAuth, requireAdmin } from '../_lib/auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const role = await requireAuth(req, res);
-  if (!role) return;
-
   const id = Number(req.query.id);
   if (isNaN(id)) return res.status(400).json({ error: 'Invalid player ID' });
+
+  if (req.method === 'PATCH') {
+    const isAdmin = await requireAdmin(req, res);
+    if (!isAdmin) return;
+
+    const { onVacation } = req.body ?? {};
+    if (typeof onVacation !== 'boolean') {
+      return res.status(400).json({ error: 'onVacation must be a boolean' });
+    }
+    const [updated] = await db
+      .update(players)
+      .set({ onVacation })
+      .where(eq(players.id, id))
+      .returning();
+    if (!updated) return res.status(404).json({ error: 'Player not found' });
+    return res.json(updated);
+  }
+
+  const role = await requireAuth(req, res);
+  if (!role) return;
 
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });

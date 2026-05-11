@@ -50,6 +50,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ name }),
       }),
+    setVacation: (id: number, onVacation: boolean) =>
+      fetchJSON<Player>(`/players/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ onVacation }),
+      }),
   },
   matches: {
     list: (opts?: { limit?: number; offset?: number; playerIds?: number[] }) => {

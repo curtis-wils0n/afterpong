@@ -3,6 +3,7 @@ export interface Player {
   name: string;
   elo: number;
   challengeRank: number | null;
+  onVacation: boolean;
   createdAt: string;
   wins?: number;
   losses?: number;

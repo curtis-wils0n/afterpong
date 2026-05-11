@@ -111,15 +111,24 @@ export default function Leaderboard() {
             <Link
               key={player.id}
               to={`/players/${player.id}`}
-              className="flex items-center gap-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg px-4 py-3 transition-colors group"
+              className={`flex items-center gap-4 border rounded-lg px-4 py-3 transition-colors group ${
+                player.onVacation
+                  ? 'bg-slate-800/40 border-slate-700/50 opacity-50 hover:opacity-80 hover:bg-slate-800'
+                  : 'bg-slate-800 hover:bg-slate-700 border-slate-700'
+              }`}
             >
               <span
                 className={`text-lg font-bold w-10 text-center ${getRankStyle(displayRanks[index])}`}
               >
                 {getRankLabel(displayRanks[index], index)}
               </span>
-              <span className="flex-1 font-medium group-hover:text-emerald-400 transition-colors">
-                {player.name}
+              <span className="flex-1 font-medium group-hover:text-emerald-400 transition-colors flex items-center gap-2">
+                <span>{player.name}</span>
+                {player.onVacation && (
+                  <span className="text-sky-400 text-[10px] font-medium px-1.5 py-0.5 bg-sky-400/10 rounded-full">
+                    VACATION
+                  </span>
+                )}
               </span>
               {player.wins != null && player.losses != null && (
                 <span className="text-sm text-slate-500 tabular-nums">
