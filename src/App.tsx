@@ -9,6 +9,7 @@ import PlayerProfile from './components/PlayerProfile';
 import Stats from './components/Stats';
 import Tournaments from './components/Tournaments';
 import TournamentDetail from './components/TournamentDetail';
+import Docs from './components/Docs';
 
 export default function App() {
   const { isAuthenticated, loading } = useAuth();
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="/stats" element={<Stats />} />
         <Route path="/tournaments" element={<Tournaments />} />
         <Route path="/tournaments/:id" element={<TournamentDetail />} />
+        <Route path="/docs" element={<Docs />} />
         <Route path="/players/:id" element={<PlayerProfile />} />
         <Route path="/login" element={<Navigate to="/" replace />} />
       </Routes>
