@@ -48,11 +48,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const acc = new Map<number, PlayerAcc>();
   const eloHistory = new Map<number, { t: string; elo: number }[]>();
-  // Per-player daily start/end ELO, keyed by UTC day (YYYY-MM-DD). Updated as
-  // matches are processed in chronological order, so endElo lands on the last
-  // match of the day.
+  // Per-player daily start/end ELO, keyed by Mountain-time day (YYYY-MM-DD).
+  // Updated as matches are processed in chronological order, so endElo lands
+  // on the last match of the day.
   type DailyAcc = { day: string; startElo: number; endElo: number };
   const dailyByPlayer = new Map<number, Map<string, DailyAcc>>();
+  const mtDayFmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Denver',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
   for (const p of allPlayers) {
     acc.set(p.id, {
       currentElo: 1000,
@@ -94,8 +100,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     eloHistory.get(m.winnerId)!.push({ t: ts, elo: winner.currentElo });
     eloHistory.get(m.loserId)!.push({ t: ts, elo: loser.currentElo });
 
-    // Daily start/end ELO buckets (UTC day)
-    const utcDay = ts.slice(0, 10);
+    // Daily start/end ELO buckets (Mountain-time day)
+    const mtDay = mtDayFmt.format(m.createdAt);
     for (const [pid, before, after] of [
       [m.winnerId, winnerEloBefore, winner.currentElo],
       [m.loserId, loserEloBefore, loser.currentElo],
@@ -105,9 +111,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         dayMap = new Map();
         dailyByPlayer.set(pid, dayMap);
       }
-      const existing = dayMap.get(utcDay);
+      const existing = dayMap.get(mtDay);
       if (!existing) {
-        dayMap.set(utcDay, { day: utcDay, startElo: before, endElo: after });
+        dayMap.set(mtDay, { day: mtDay, startElo: before, endElo: after });
       } else {
         existing.endElo = after;
       }
