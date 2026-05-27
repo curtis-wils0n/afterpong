@@ -148,9 +148,18 @@ export interface StatsResponse {
     } | null;
   };
   relationships: {
-    mostFriendly: { players: PlayerRef[]; count: number } | null;
-    biggestVillain: { players: PlayerRef[]; count: number } | null;
-    biggestOp: { players: PlayerRef[]; count: number } | null;
+    mostFriendly: {
+      entries: { player: PlayerRef; with: PlayerRef[] }[];
+      count: number;
+    } | null;
+    biggestVillain: {
+      entries: { player: PlayerRef; with: PlayerRef[] }[];
+      count: number;
+    } | null;
+    biggestOp: {
+      entries: { player: PlayerRef; with: PlayerRef[] }[];
+      count: number;
+    } | null;
   };
   eloHistory: {
     players: {

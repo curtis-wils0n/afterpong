@@ -222,10 +222,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     playerH2H.set(p.id, { matches: playerMatches, h2h });
   }
 
-  // Count badge designations per opponent
+  // Count badge designations per opponent and track who designated whom.
   const friendCounts = new Map<number, number>();
   const nemesisCounts = new Map<number, number>();
   const rivalCounts = new Map<number, number>();
+  const friendOf = new Map<number, number[]>();
+  const nemesisOf = new Map<number, number[]>();
+  const rivalOf = new Map<number, number[]>();
+
+  const addSubject = (
+    map: Map<number, number[]>,
+    targetId: number,
+    subjectId: number,
+  ) => {
+    const list = map.get(targetId);
+    if (list) list.push(subjectId);
+    else map.set(targetId, [subjectId]);
+  };
 
   for (const p of allPlayers) {
     const data = playerH2H.get(p.id)!;
@@ -235,12 +248,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (nemesisId !== null) {
       nemesisCounts.set(nemesisId, (nemesisCounts.get(nemesisId) ?? 0) + 1);
+      addSubject(nemesisOf, nemesisId, p.id);
     }
     if (rivalId !== null) {
       rivalCounts.set(rivalId, (rivalCounts.get(rivalId) ?? 0) + 1);
+      addSubject(rivalOf, rivalId, p.id);
     }
     if (friendId !== null) {
       friendCounts.set(friendId, (friendCounts.get(friendId) ?? 0) + 1);
+      addSubject(friendOf, friendId, p.id);
     }
   }
 
@@ -475,6 +491,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return { players: best.players, count: best.score };
   };
 
+  // Wrap relationship stats with the list of players who chose each winner.
+  const wrapRelationship = (
+    best: { players: PlayerRef[]; score: number } | null,
+    fromMap: Map<number, number[]>,
+  ):
+    | { entries: { player: PlayerRef; with: PlayerRef[] }[]; count: number }
+    | null => {
+    if (!best || best.score <= 0) return null;
+    return {
+      entries: best.players.map((pl) => ({
+        player: pl,
+        with: (fromMap.get(pl.id) ?? []).map(getRef),
+      })),
+      count: best.score,
+    };
+  };
+
   const response = {
     streaks: {
       currentWinStreak: wrapCount(currentWin),
@@ -550,9 +583,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       tightestRivalry,
     },
     relationships: {
-      mostFriendly: wrapCount(mostFriendly),
-      biggestVillain: wrapCount(biggestVillain),
-      biggestOp: wrapCount(biggestOp),
+      mostFriendly: wrapRelationship(mostFriendly, friendOf),
+      biggestVillain: wrapRelationship(biggestVillain, nemesisOf),
+      biggestOp: wrapRelationship(biggestOp, rivalOf),
     },
     eloHistory: {
       players: allPlayers.map((p) => ({

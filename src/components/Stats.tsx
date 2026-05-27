@@ -825,7 +825,17 @@ export default function Stats() {
             valueClass="text-sky-400"
             tooltip={TIPS.mostFriendly}
           >
-            <PlayerLinks players={stats.relationships.mostFriendly.players} />
+            {stats.relationships.mostFriendly.entries.map((e) => (
+              <div key={e.player.id}>
+                <PlayerLink player={e.player} />
+                {e.with.length > 0 && (
+                  <span className="text-slate-600">
+                    {' '}
+                    · <PlayerLinks players={e.with} />
+                  </span>
+                )}
+              </div>
+            ))}
           </StatCard>
         ) : (
           <NoData label="Most Friendly" tooltip={TIPS.mostFriendly} />
@@ -838,9 +848,17 @@ export default function Stats() {
             valueClass="text-red-400"
             tooltip={TIPS.biggestVillain}
           >
-            <PlayerLinks
-              players={stats.relationships.biggestVillain.players}
-            />
+            {stats.relationships.biggestVillain.entries.map((e) => (
+              <div key={e.player.id}>
+                <PlayerLink player={e.player} />
+                {e.with.length > 0 && (
+                  <span className="text-slate-600">
+                    {' '}
+                    · <PlayerLinks players={e.with} />
+                  </span>
+                )}
+              </div>
+            ))}
           </StatCard>
         ) : (
           <NoData label="Biggest Villain" tooltip={TIPS.biggestVillain} />
@@ -853,7 +871,17 @@ export default function Stats() {
             valueClass="text-amber-400"
             tooltip={TIPS.biggestOp}
           >
-            <PlayerLinks players={stats.relationships.biggestOp.players} />
+            {stats.relationships.biggestOp.entries.map((e) => (
+              <div key={e.player.id}>
+                <PlayerLink player={e.player} />
+                {e.with.length > 0 && (
+                  <span className="text-slate-600">
+                    {' '}
+                    · <PlayerLinks players={e.with} />
+                  </span>
+                )}
+              </div>
+            ))}
           </StatCard>
         ) : (
           <NoData label="Biggest Op" tooltip={TIPS.biggestOp} />
