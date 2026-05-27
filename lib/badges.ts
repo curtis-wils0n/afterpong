@@ -42,33 +42,33 @@ export function computeNemesis(
   return nemesisId;
 }
 
-// Rival: smallest win/loss gap; prefer opponents who have both beaten you
-// and whom you have beaten; tie-break by most games at that gap, then lowest id.
-// Requires at least 2 total games against the opponent.
+// Rival: tightest head-to-head, scored as `total - 3 * |gap|`. Larger
+// samples win even with small imbalance (9-8 beats 4-4), but one-sided
+// matchups are heavily penalized (5-0 scores -10, loses to a single 1-1).
+// Tie-break: smaller gap, then lowest opponent id.
+const RIVAL_GAP_WEIGHT = 3;
 export function computeRival(h2h: H2HEntry[]): number | null {
-  const candidates = h2h
-    .map((h) => ({
-      id: h.opponentId,
-      wins: h.wins,
-      losses: h.losses,
-      games: h.wins + h.losses,
-      diff: Math.abs(h.wins - h.losses),
-    }))
-    .filter((h) => h.games >= 2);
+  if (h2h.length === 0) return null;
 
-  if (candidates.length === 0) return null;
-
-  let pool = candidates.filter((h) => h.wins >= 1 && h.losses >= 1);
-  if (pool.length === 0) pool = candidates;
-
-  let best = pool[0]!;
-  for (const h of pool) {
-    if (h.diff < best.diff) best = h;
-    else if (h.diff === best.diff && h.games > best.games) best = h;
-    else if (h.diff === best.diff && h.games === best.games && h.id < best.id)
-      best = h;
+  let best: {
+    id: number;
+    score: number;
+    gap: number;
+  } | null = null;
+  for (const h of h2h) {
+    const total = h.wins + h.losses;
+    const gap = Math.abs(h.wins - h.losses);
+    const score = total - RIVAL_GAP_WEIGHT * gap;
+    if (
+      !best ||
+      score > best.score ||
+      (score === best.score && gap < best.gap) ||
+      (score === best.score && gap === best.gap && h.opponentId < best.id)
+    ) {
+      best = { id: h.opponentId, score, gap };
+    }
   }
-  return best.id;
+  return best?.id ?? null;
 }
 
 // Friend: most total games played together, tiebreak by lowest opponent id.
