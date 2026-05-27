@@ -634,7 +634,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       mostUpsetsCaused: wrapCount(mostUpsets),
       highestWinRate:
         highWinRate && highWinRate.score >= 0
-          ? { players: highWinRate.players, rate: highWinRate.score }
+          ? {
+              entries: highWinRate.players.map((pl) => ({
+                player: pl,
+                wins: acc.get(pl.id)!.wins,
+                losses: acc.get(pl.id)!.losses,
+              })),
+              rate: highWinRate.score,
+            }
           : null,
     },
     players: {

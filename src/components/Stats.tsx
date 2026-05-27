@@ -817,7 +817,15 @@ export default function Stats() {
             valueClass="text-emerald-400"
             tooltip={TIPS.highestWinRate}
           >
-            <PlayerLinks players={stats.matches.highestWinRate.players} />
+            {stats.matches.highestWinRate.entries.map((e) => (
+              <div key={e.player.id}>
+                <PlayerLink player={e.player} />
+                <span className="text-slate-600">
+                  {' '}
+                  · {e.wins}-{e.losses}
+                </span>
+              </div>
+            ))}
           </StatCard>
         ) : (
           <NoData label="Highest Win Rate" tooltip={TIPS.highestWinRate} />

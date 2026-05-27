@@ -115,7 +115,10 @@ export interface StatsResponse {
       eloGain: number;
     } | null;
     mostUpsetsCaused: { players: PlayerRef[]; count: number } | null;
-    highestWinRate: { players: PlayerRef[]; rate: number } | null;
+    highestWinRate: {
+      entries: { player: PlayerRef; wins: number; losses: number }[];
+      rate: number;
+    } | null;
   };
   players: {
     peakElo: { players: PlayerRef[]; elo: number } | null;
