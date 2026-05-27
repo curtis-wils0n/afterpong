@@ -6,7 +6,6 @@ ELO leaderboard, tournaments, and stats tracker for office ping pong.
 
 - Node.js 20+
 - [`just`](https://github.com/casey/just) — `brew install just` on macOS
-- Access to the `afterpong` Vercel project (ask Jon)
 
 ## Setup
 
@@ -16,13 +15,10 @@ cd afterpong
 just setup
 ```
 
-`just setup` installs deps, links the Vercel project, and pulls
-environment variables into `.env`.
-
-`.env` will point at the prod database. Before running anything, swap
-`STORAGE_DATABASE_URL` and `STORAGE_DATABASE_URL_UNPOOLED` for an
-isolated Neon branch — ask Jon for a personal branch or access to the
-shared `local-dev` branch.
+Ask Jon for `.env` values and drop them in a `.env` file at the repo
+root. The keys you need are listed in `.env.example`. The database
+URLs should point at a personal Neon branch (or the shared
+`local-dev` branch) — not prod.
 
 ## Run
 

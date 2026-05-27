@@ -1,11 +1,9 @@
 _:
     just --choose
 
-# First-time setup: install deps, link Vercel project, pull env vars
+# First-time setup: install deps
 setup:
     npm install
-    npx vercel link
-    npx vercel env pull .env
 
 # Frontend + Vercel Functions on http://localhost:3001
 dev:
