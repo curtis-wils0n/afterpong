@@ -277,7 +277,7 @@ export default function LogMatchModal({
                 <span className="flex-1 text-xs text-slate-500 text-center truncate">
                   {player2.name}
                 </span>
-                <span className="w-5 shrink-0" />
+                {gameScores.length > 1 && <span className="w-5 shrink-0" />}
               </div>
               <div className="space-y-2">
                 {gameScores.map((game, index) => {
@@ -300,7 +300,7 @@ export default function LogMatchModal({
                         onChange={(e) =>
                           updateGameScore(index, 'player1Score', e.target.value)
                         }
-                        className={`flex-1 bg-slate-700 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-center ${
+                        className={`flex-1 min-w-0 bg-slate-700 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-center ${
                           p1Won
                             ? 'border-emerald-500/40'
                             : p2Won
@@ -316,7 +316,7 @@ export default function LogMatchModal({
                         onChange={(e) =>
                           updateGameScore(index, 'player2Score', e.target.value)
                         }
-                        className={`flex-1 bg-slate-700 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-center ${
+                        className={`flex-1 min-w-0 bg-slate-700 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-center ${
                           p2Won
                             ? 'border-emerald-500/40'
                             : p1Won
@@ -324,7 +324,7 @@ export default function LogMatchModal({
                               : 'border-slate-600'
                         }`}
                       />
-                      {gameScores.length > 1 ? (
+                      {gameScores.length > 1 && (
                         <button
                           type="button"
                           onClick={() => removeGame(index)}
@@ -332,8 +332,6 @@ export default function LogMatchModal({
                         >
                           &times;
                         </button>
-                      ) : (
-                        <span className="w-5 shrink-0" />
                       )}
                     </div>
                   );
