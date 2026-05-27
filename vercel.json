@@ -5,6 +5,6 @@
     }
   },
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/" }
+    { "source": "/((?!api/|@|src/|node_modules/|.*\\.).*)", "destination": "/" }
   ]
 }
