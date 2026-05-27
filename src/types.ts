@@ -93,10 +93,12 @@ export interface StatsResponse {
   };
   matches: {
     biggestUpset: {
-      winner: PlayerRef;
-      loser: PlayerRef;
+      entries: {
+        winner: PlayerRef;
+        loser: PlayerRef;
+        matchDate: string;
+      }[];
       eloGain: number;
-      matchDate: string;
     } | null;
     mostUpsetsCaused: { players: PlayerRef[]; count: number } | null;
     highestWinRate: { players: PlayerRef[]; rate: number } | null;
@@ -105,30 +107,20 @@ export interface StatsResponse {
     peakElo: { players: PlayerRef[]; elo: number } | null;
     currentTopElo: { players: PlayerRef[]; elo: number } | null;
     biggestClimber: {
-      player: PlayerRef;
+      entries: { player: PlayerRef; from: number; to: number }[];
       climb: number;
-      from: number;
-      to: number;
     } | null;
     biggestFaller: {
-      player: PlayerRef;
+      entries: { player: PlayerRef; from: number; to: number }[];
       fall: number;
-      from: number;
-      to: number;
     } | null;
     biggestDailyClimber: {
-      player: PlayerRef;
-      day: string;
+      entries: { player: PlayerRef; day: string; from: number; to: number }[];
       climb: number;
-      from: number;
-      to: number;
     } | null;
     biggestDailyFaller: {
-      player: PlayerRef;
-      day: string;
+      entries: { player: PlayerRef; day: string; from: number; to: number }[];
       fall: number;
-      from: number;
-      to: number;
     } | null;
   };
   ladder: {

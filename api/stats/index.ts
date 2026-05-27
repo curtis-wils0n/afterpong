@@ -86,7 +86,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     { p1Id: number; p2Id: number; p1Wins: number; p2Wins: number }
   >();
 
-  let biggestUpsetMatch: typeof allMatches[number] | null = null;
+  let biggestUpsetGain = -Infinity;
+  const biggestUpsetMatches: (typeof allMatches)[number][] = [];
 
   // Single chronological pass
   for (const m of allMatches) {
@@ -174,12 +175,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Biggest upset
-    if (
-      !biggestUpsetMatch ||
-      m.winnerEloChange > biggestUpsetMatch.winnerEloChange
-    ) {
-      biggestUpsetMatch = m;
+    // Biggest upset (collect all matches tied at the max ELO gain)
+    if (m.winnerEloChange > biggestUpsetGain) {
+      biggestUpsetGain = m.winnerEloChange;
+      biggestUpsetMatches.length = 0;
+      biggestUpsetMatches.push(m);
+    } else if (m.winnerEloChange === biggestUpsetGain) {
+      biggestUpsetMatches.push(m);
     }
 
     // Rivalry
@@ -243,18 +245,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Reduce to the stats
-  type Best<T> = { value: T; score: number } | null;
-  const pickMax = <T>(items: T[], score: (t: T) => number): Best<T> => {
-    let best: Best<T> = null;
-    for (const item of items) {
-      const s = score(item);
-      if (best === null || s > best.score) {
-        best = { value: item, score: s };
-      }
-    }
-    return best;
-  };
-
   // Collect all players tied at the maximum score
   const pickAllMax = (
     items: typeof allPlayers,
@@ -308,48 +298,76 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (total < MIN_WIN_RATE_MATCHES) return -1;
     return a.wins / total;
   });
-  const climber = pickMax(playerList, (p) => {
+  const climber = pickAllMax(playerList, (p) => {
     const a = acc.get(p.id)!;
     return a.currentElo - a.minElo;
   });
-  const faller = pickMax(playerList, (p) => {
+  const faller = pickAllMax(playerList, (p) => {
     const a = acc.get(p.id)!;
     return a.peakElo - a.currentElo;
   });
 
-  let biggestDailyClimber:
-    | { player: PlayerRef; day: string; climb: number; from: number; to: number }
-    | null = null;
-  let biggestDailyFaller:
-    | { player: PlayerRef; day: string; fall: number; from: number; to: number }
-    | null = null;
+  type DailyEntry = {
+    player: PlayerRef;
+    day: string;
+    from: number;
+    to: number;
+  };
+  let bestDailyClimb = 0;
+  const dailyClimbEntries: DailyEntry[] = [];
+  let bestDailyFall = 0;
+  const dailyFallEntries: DailyEntry[] = [];
   for (const [pid, days] of dailyByPlayer) {
     for (const d of days.values()) {
       const delta = d.endElo - d.startElo;
       if (delta > 0) {
-        if (!biggestDailyClimber || delta > biggestDailyClimber.climb) {
-          biggestDailyClimber = {
+        if (delta > bestDailyClimb) {
+          bestDailyClimb = delta;
+          dailyClimbEntries.length = 0;
+          dailyClimbEntries.push({
             player: getRef(pid),
             day: d.day,
-            climb: delta,
             from: d.startElo,
             to: d.endElo,
-          };
+          });
+        } else if (delta === bestDailyClimb) {
+          dailyClimbEntries.push({
+            player: getRef(pid),
+            day: d.day,
+            from: d.startElo,
+            to: d.endElo,
+          });
         }
       } else if (delta < 0) {
         const fall = -delta;
-        if (!biggestDailyFaller || fall > biggestDailyFaller.fall) {
-          biggestDailyFaller = {
+        if (fall > bestDailyFall) {
+          bestDailyFall = fall;
+          dailyFallEntries.length = 0;
+          dailyFallEntries.push({
             player: getRef(pid),
             day: d.day,
-            fall,
             from: d.startElo,
             to: d.endElo,
-          };
+          });
+        } else if (fall === bestDailyFall) {
+          dailyFallEntries.push({
+            player: getRef(pid),
+            day: d.day,
+            from: d.startElo,
+            to: d.endElo,
+          });
         }
       }
     }
   }
+  const biggestDailyClimber =
+    bestDailyClimb > 0
+      ? { entries: dailyClimbEntries, climb: bestDailyClimb }
+      : null;
+  const biggestDailyFaller =
+    bestDailyFall > 0
+      ? { entries: dailyFallEntries, fall: bestDailyFall }
+      : null;
 
   // Biggest rivalry and dominator
   // Score `total - TIGHTNESS_GAP_WEIGHT * gap` rewards larger sample sizes
@@ -465,14 +483,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       longestLossStreak: wrapCount(longestLoss),
     },
     matches: {
-      biggestUpset: biggestUpsetMatch
-        ? {
-            winner: getRef(biggestUpsetMatch.winnerId),
-            loser: getRef(biggestUpsetMatch.loserId),
-            eloGain: biggestUpsetMatch.winnerEloChange,
-            matchDate: biggestUpsetMatch.createdAt.toISOString(),
-          }
-        : null,
+      biggestUpset:
+        biggestUpsetMatches.length > 0
+          ? {
+              entries: biggestUpsetMatches.map((m) => ({
+                winner: getRef(m.winnerId),
+                loser: getRef(m.loserId),
+                matchDate: m.createdAt.toISOString(),
+              })),
+              eloGain: biggestUpsetGain,
+            }
+          : null,
       mostUpsetsCaused: wrapCount(mostUpsets),
       highestWinRate:
         highWinRate && highWinRate.score >= 0
@@ -497,19 +518,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       biggestClimber:
         climber && climber.score > 0
           ? {
-              player: getRef(climber.value.id),
+              entries: climber.players.map((pl) => ({
+                player: pl,
+                from: acc.get(pl.id)!.minElo,
+                to: acc.get(pl.id)!.currentElo,
+              })),
               climb: climber.score,
-              from: acc.get(climber.value.id)!.minElo,
-              to: acc.get(climber.value.id)!.currentElo,
             }
           : null,
       biggestFaller:
         faller && faller.score > 0
           ? {
-              player: getRef(faller.value.id),
+              entries: faller.players.map((pl) => ({
+                player: pl,
+                from: acc.get(pl.id)!.peakElo,
+                to: acc.get(pl.id)!.currentElo,
+              })),
               fall: faller.score,
-              from: acc.get(faller.value.id)!.peakElo,
-              to: acc.get(faller.value.id)!.currentElo,
             }
           : null,
       biggestDailyClimber,

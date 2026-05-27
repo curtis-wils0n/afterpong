@@ -117,7 +117,7 @@ const TIPS = {
   dominator:
     'Largest gap between wins and losses in any head-to-head matchup',
   tightestRivalry:
-    'Closest head-to-head matchup, weighted to favor more games (each win-loss gap costs 3 matches of credit)',
+    'Closest head-to-head matchup, weighted to favor more games',
   mostFriendly:
     'Player most often shown as the FRIEND badge on others’ profiles (most games together)',
   biggestVillain:
@@ -494,12 +494,15 @@ export default function Stats() {
             valueClass="text-emerald-400"
             tooltip={TIPS.biggestClimber}
           >
-            <PlayerLink player={stats.players.biggestClimber.player} />
-            <span className="text-slate-600">
-              {' '}
-              · {stats.players.biggestClimber.from} →{' '}
-              {stats.players.biggestClimber.to}
-            </span>
+            {stats.players.biggestClimber.entries.map((e) => (
+              <div key={e.player.id}>
+                <PlayerLink player={e.player} />
+                <span className="text-slate-600">
+                  {' '}
+                  · {e.from} → {e.to}
+                </span>
+              </div>
+            ))}
           </StatCard>
         ) : (
           <NoData label="Biggest Climb" tooltip={TIPS.biggestClimber} />
@@ -512,12 +515,15 @@ export default function Stats() {
             valueClass="text-red-400"
             tooltip={TIPS.biggestFaller}
           >
-            <PlayerLink player={stats.players.biggestFaller.player} />
-            <span className="text-slate-600">
-              {' '}
-              · {stats.players.biggestFaller.from} →{' '}
-              {stats.players.biggestFaller.to}
-            </span>
+            {stats.players.biggestFaller.entries.map((e) => (
+              <div key={e.player.id}>
+                <PlayerLink player={e.player} />
+                <span className="text-slate-600">
+                  {' '}
+                  · {e.from} → {e.to}
+                </span>
+              </div>
+            ))}
           </StatCard>
         ) : (
           <NoData label="Biggest Fall" tooltip={TIPS.biggestFaller} />
@@ -542,13 +548,15 @@ export default function Stats() {
             valueClass="text-emerald-400"
             tooltip={TIPS.biggestDailyClimber}
           >
-            <PlayerLink player={stats.players.biggestDailyClimber.player} />
-            <span className="text-slate-600">
-              {' '}
-              · {stats.players.biggestDailyClimber.from} →{' '}
-              {stats.players.biggestDailyClimber.to} ·{' '}
-              {formatDay(stats.players.biggestDailyClimber.day)}
-            </span>
+            {stats.players.biggestDailyClimber.entries.map((e, i) => (
+              <div key={`${e.player.id}-${e.day}-${i}`}>
+                <PlayerLink player={e.player} />
+                <span className="text-slate-600">
+                  {' '}
+                  · {e.from} → {e.to} · {formatDay(e.day)}
+                </span>
+              </div>
+            ))}
           </StatCard>
         ) : (
           <NoData
@@ -564,13 +572,15 @@ export default function Stats() {
             valueClass="text-red-400"
             tooltip={TIPS.biggestDailyFaller}
           >
-            <PlayerLink player={stats.players.biggestDailyFaller.player} />
-            <span className="text-slate-600">
-              {' '}
-              · {stats.players.biggestDailyFaller.from} →{' '}
-              {stats.players.biggestDailyFaller.to} ·{' '}
-              {formatDay(stats.players.biggestDailyFaller.day)}
-            </span>
+            {stats.players.biggestDailyFaller.entries.map((e, i) => (
+              <div key={`${e.player.id}-${e.day}-${i}`}>
+                <PlayerLink player={e.player} />
+                <span className="text-slate-600">
+                  {' '}
+                  · {e.from} → {e.to} · {formatDay(e.day)}
+                </span>
+              </div>
+            ))}
           </StatCard>
         ) : (
           <NoData
@@ -658,13 +668,17 @@ export default function Stats() {
             valueClass="text-yellow-400"
             tooltip={TIPS.biggestUpset}
           >
-            <PlayerLink player={stats.matches.biggestUpset.winner} />
-            <span className="text-slate-600"> beat </span>
-            <PlayerLink player={stats.matches.biggestUpset.loser} />
-            <span className="text-slate-600">
-              {' '}
-              · {formatDate(stats.matches.biggestUpset.matchDate)}
-            </span>
+            {stats.matches.biggestUpset.entries.map((e, i) => (
+              <div key={`${e.winner.id}-${e.loser.id}-${e.matchDate}-${i}`}>
+                <PlayerLink player={e.winner} />
+                <span className="text-slate-600"> beat </span>
+                <PlayerLink player={e.loser} />
+                <span className="text-slate-600">
+                  {' '}
+                  · {formatDate(e.matchDate)}
+                </span>
+              </div>
+            ))}
           </StatCard>
         ) : (
           <NoData label="Biggest Upset" tooltip={TIPS.biggestUpset} />
@@ -740,13 +754,12 @@ export default function Stats() {
             valueClass="text-amber-400"
             tooltip={TIPS.biggestRivalry}
           >
-            {stats.rivalries.biggestRivalry.pairs.map((pair, i) => (
-              <span key={`${pair.p1.id}-${pair.p2.id}`}>
-                {i > 0 && <span className="text-slate-600">, </span>}
+            {stats.rivalries.biggestRivalry.pairs.map((pair) => (
+              <div key={`${pair.p1.id}-${pair.p2.id}`}>
                 <PlayerLink player={pair.p1} />
                 <span className="text-slate-600"> vs </span>
                 <PlayerLink player={pair.p2} />
-              </span>
+              </div>
             ))}
           </StatCard>
         ) : (
@@ -764,9 +777,8 @@ export default function Stats() {
             valueClass="text-amber-400"
             tooltip={TIPS.dominator}
           >
-            {stats.rivalries.dominator.pairs.map((pair, i) => (
-              <span key={`${pair.dominator.id}-${pair.victim.id}`}>
-                {i > 0 && <span className="text-slate-600">, </span>}
+            {stats.rivalries.dominator.pairs.map((pair) => (
+              <div key={`${pair.dominator.id}-${pair.victim.id}`}>
                 <PlayerLink player={pair.dominator} />
                 <span className="text-slate-600"> over </span>
                 <PlayerLink player={pair.victim} />
@@ -776,7 +788,7 @@ export default function Stats() {
                     ({pair.wins}-{pair.losses})
                   </span>
                 )}
-              </span>
+              </div>
             ))}
           </StatCard>
         ) : (
@@ -790,13 +802,12 @@ export default function Stats() {
             valueClass="text-amber-400"
             tooltip={TIPS.tightestRivalry}
           >
-            {stats.rivalries.tightestRivalry.pairs.map((pair, i) => (
-              <span key={`${pair.leader.id}-${pair.trailer.id}`}>
-                {i > 0 && <span className="text-slate-600">, </span>}
+            {stats.rivalries.tightestRivalry.pairs.map((pair) => (
+              <div key={`${pair.leader.id}-${pair.trailer.id}`}>
                 <PlayerLink player={pair.leader} />
                 <span className="text-slate-600"> vs </span>
                 <PlayerLink player={pair.trailer} />
-              </span>
+              </div>
             ))}
           </StatCard>
         ) : (
