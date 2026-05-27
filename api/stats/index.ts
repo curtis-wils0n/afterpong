@@ -32,6 +32,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     playerMap.get(id) ?? { id, name: `Player #${id}` };
 
   // Per-player accumulators
+  type StreakMatchRef = {
+    opponentId: number;
+    playerScore: number | null;
+    opponentScore: number | null;
+    date: string;
+  };
   type PlayerAcc = {
     currentElo: number;
     peakElo: number;
@@ -41,6 +47,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     currentLossStreak: number;
     longestWinStreak: number;
     longestLossStreak: number;
+    currentWinStreakStart: string | null;
+    currentWinStreakMatches: StreakMatchRef[];
+    longestWinStreakStart: string | null;
+    longestWinStreakEnd: string | null;
+    longestWinStreakMatches: StreakMatchRef[];
+    currentLossStreakStart: string | null;
+    currentLossStreakMatches: StreakMatchRef[];
+    longestLossStreakStart: string | null;
+    longestLossStreakEnd: string | null;
+    longestLossStreakMatches: StreakMatchRef[];
     climbs: number;
     defenses: number;
     upsetsCaused: number;
@@ -71,6 +87,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       currentLossStreak: 0,
       longestWinStreak: 0,
       longestLossStreak: 0,
+      currentWinStreakStart: null,
+      currentWinStreakMatches: [],
+      longestWinStreakStart: null,
+      longestWinStreakEnd: null,
+      longestWinStreakMatches: [],
+      currentLossStreakStart: null,
+      currentLossStreakMatches: [],
+      longestLossStreakStart: null,
+      longestLossStreakEnd: null,
+      longestLossStreakMatches: [],
       climbs: 0,
       defenses: 0,
       upsetsCaused: 0,
@@ -145,16 +171,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     loser.losses += 1;
 
     // Streaks
+    if (winner.currentWinStreak === 0) {
+      winner.currentWinStreakStart = ts;
+      winner.currentWinStreakMatches = [];
+    }
+    winner.currentWinStreakMatches.push({
+      opponentId: m.loserId,
+      playerScore: m.winnerScore,
+      opponentScore: m.loserScore,
+      date: ts,
+    });
     winner.currentWinStreak += 1;
-    winner.currentLossStreak = 0;
     if (winner.currentWinStreak > winner.longestWinStreak) {
       winner.longestWinStreak = winner.currentWinStreak;
+      winner.longestWinStreakStart = winner.currentWinStreakStart;
+      winner.longestWinStreakEnd = ts;
+      winner.longestWinStreakMatches = [...winner.currentWinStreakMatches];
     }
+    winner.currentLossStreak = 0;
+    winner.currentLossStreakStart = null;
+    winner.currentLossStreakMatches = [];
+
+    if (loser.currentLossStreak === 0) {
+      loser.currentLossStreakStart = ts;
+      loser.currentLossStreakMatches = [];
+    }
+    loser.currentLossStreakMatches.push({
+      opponentId: m.winnerId,
+      playerScore: m.loserScore,
+      opponentScore: m.winnerScore,
+      date: ts,
+    });
     loser.currentLossStreak += 1;
-    loser.currentWinStreak = 0;
     if (loser.currentLossStreak > loser.longestLossStreak) {
       loser.longestLossStreak = loser.currentLossStreak;
+      loser.longestLossStreakStart = loser.currentLossStreakStart;
+      loser.longestLossStreakEnd = ts;
+      loser.longestLossStreakMatches = [...loser.currentLossStreakMatches];
     }
+    loser.currentWinStreak = 0;
+    loser.currentWinStreakStart = null;
+    loser.currentWinStreakMatches = [];
 
     // Upsets caused
     if (isUpset(m)) {
@@ -491,6 +548,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return { players: best.players, count: best.score };
   };
 
+  type StreakKind = 'currentWin' | 'longestWin' | 'currentLoss' | 'longestLoss';
+  const wrapStreak = (
+    best: { players: PlayerRef[]; score: number } | null,
+    kind: StreakKind,
+  ) => {
+    if (!best || best.score <= 0) return null;
+    return {
+      entries: best.players.map((pl) => {
+        const a = acc.get(pl.id)!;
+        const start =
+          kind === 'currentWin'
+            ? a.currentWinStreakStart
+            : kind === 'longestWin'
+              ? a.longestWinStreakStart
+              : kind === 'currentLoss'
+                ? a.currentLossStreakStart
+                : a.longestLossStreakStart;
+        const end =
+          kind === 'longestWin'
+            ? a.longestWinStreakEnd
+            : kind === 'longestLoss'
+              ? a.longestLossStreakEnd
+              : null;
+        const matches =
+          kind === 'currentWin'
+            ? a.currentWinStreakMatches
+            : kind === 'longestWin'
+              ? a.longestWinStreakMatches
+              : kind === 'currentLoss'
+                ? a.currentLossStreakMatches
+                : a.longestLossStreakMatches;
+        return {
+          player: pl,
+          startDate: start ?? '',
+          ...(end ? { endDate: end } : {}),
+          matches: matches.map((mm) => ({
+            opponent: getRef(mm.opponentId),
+            playerScore: mm.playerScore,
+            opponentScore: mm.opponentScore,
+            date: mm.date,
+          })),
+        };
+      }),
+      count: best.score,
+    };
+  };
+
   // Wrap relationship stats with the list of players who chose each winner.
   const wrapRelationship = (
     best: { players: PlayerRef[]; score: number } | null,
@@ -510,10 +614,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const response = {
     streaks: {
-      currentWinStreak: wrapCount(currentWin),
-      longestWinStreak: wrapCount(longestWin),
-      currentLossStreak: wrapCount(currentLoss),
-      longestLossStreak: wrapCount(longestLoss),
+      currentWinStreak: wrapStreak(currentWin, 'currentWin'),
+      longestWinStreak: wrapStreak(longestWin, 'longestWin'),
+      currentLossStreak: wrapStreak(currentLoss, 'currentLoss'),
+      longestLossStreak: wrapStreak(longestLoss, 'longestLoss'),
     },
     matches: {
       biggestUpset:

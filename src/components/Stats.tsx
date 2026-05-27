@@ -10,7 +10,12 @@ import {
 } from 'recharts';
 import { api } from '../lib/api';
 import Tooltip from './Tooltip';
-import type { StatsResponse, PlayerRef } from '../types';
+import type {
+  StatsResponse,
+  PlayerRef,
+  StreakEntry,
+  StreakMatch,
+} from '../types';
 
 function PlayerLink({ player }: { player: PlayerRef }) {
   return (
@@ -44,7 +49,7 @@ function StatCard({
   children,
 }: {
   label: string;
-  value?: string;
+  value?: React.ReactNode;
   valueClass?: string;
   tooltip?: string;
   children?: React.ReactNode;
@@ -132,6 +137,110 @@ function formatDate(iso: string) {
     day: 'numeric',
     year: 'numeric',
   });
+}
+
+function formatDateShort(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function StreakMatchList({
+  matches,
+  isWin,
+}: {
+  matches: StreakMatch[];
+  isWin: boolean;
+}) {
+  const scoreClass = isWin ? 'text-emerald-400' : 'text-red-400';
+  return (
+    <div className="flex flex-col gap-1">
+      {matches.map((m, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <span className="text-slate-600">vs</span>
+          <span className="text-slate-300 truncate">{m.opponent.name}</span>
+          <span className="ml-auto flex items-center gap-2">
+            {m.playerScore != null && m.opponentScore != null && (
+              <span className={`tabular-nums ${scoreClass}`}>
+                {m.playerScore}-{m.opponentScore}
+              </span>
+            )}
+            <span className="text-slate-600 tabular-nums">
+              {formatDateShort(m.date)}
+            </span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function streakTooltipContent(entries: StreakEntry[], isWin: boolean) {
+  if (entries.length === 1) {
+    return <StreakMatchList matches={entries[0].matches} isWin={isWin} />;
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {entries.map((e) => (
+        <div key={e.player.id}>
+          <div className="text-slate-200 font-medium mb-1">{e.player.name}</div>
+          <StreakMatchList matches={e.matches} isWin={isWin} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StreakCard({
+  label,
+  count,
+  suffix,
+  valueClass,
+  tooltip,
+  entries,
+  isWin,
+}: {
+  label: string;
+  count: number;
+  suffix: 'W' | 'L';
+  valueClass: string;
+  tooltip: string;
+  entries: StreakEntry[];
+  isWin: boolean;
+}) {
+  return (
+    <StatCard
+      label={label}
+      tooltip={tooltip}
+      valueClass={valueClass}
+      value={
+        <Tooltip
+          align="left"
+          widthClass="w-72"
+          content={streakTooltipContent(entries, isWin)}
+        >
+          <span className="cursor-help">
+            {count}
+            {suffix}
+          </span>
+        </Tooltip>
+      }
+    >
+      {entries.map((e) => (
+        <div key={e.player.id}>
+          <PlayerLink player={e.player} />
+          <span className="text-slate-600">
+            {' '}
+            ·{' '}
+            {e.endDate
+              ? `${formatDateShort(e.startDate)} → ${formatDateShort(e.endDate)}`
+              : `since ${formatDateShort(e.startDate)}`}
+          </span>
+        </div>
+      ))}
+    </StatCard>
+  );
 }
 
 function formatDay(dayKey: string) {
@@ -594,14 +703,15 @@ export default function Stats() {
       <h2 className="text-lg font-semibold mb-3">Streaks</h2>
       <div className="grid grid-cols-2 gap-4 mb-6">
         {stats.streaks.currentWinStreak ? (
-          <StatCard
+          <StreakCard
             label="Current Longest Win Streak"
-            value={`${stats.streaks.currentWinStreak.count}W`}
+            count={stats.streaks.currentWinStreak.count}
+            suffix="W"
             valueClass="text-emerald-400"
             tooltip={TIPS.currentWinStreak}
-          >
-            <PlayerLinks players={stats.streaks.currentWinStreak.players} />
-          </StatCard>
+            entries={stats.streaks.currentWinStreak.entries}
+            isWin
+          />
         ) : (
           <NoData
             label="Current Longest Win Streak"
@@ -610,14 +720,15 @@ export default function Stats() {
         )}
 
         {stats.streaks.longestWinStreak ? (
-          <StatCard
+          <StreakCard
             label="All-Time Longest Win Streak"
-            value={`${stats.streaks.longestWinStreak.count}W`}
+            count={stats.streaks.longestWinStreak.count}
+            suffix="W"
             valueClass="text-emerald-400"
             tooltip={TIPS.longestWinStreak}
-          >
-            <PlayerLinks players={stats.streaks.longestWinStreak.players} />
-          </StatCard>
+            entries={stats.streaks.longestWinStreak.entries}
+            isWin
+          />
         ) : (
           <NoData
             label="All-Time Longest Win Streak"
@@ -626,14 +737,15 @@ export default function Stats() {
         )}
 
         {stats.streaks.currentLossStreak ? (
-          <StatCard
+          <StreakCard
             label="Current Longest Loss Streak"
-            value={`${stats.streaks.currentLossStreak.count}L`}
+            count={stats.streaks.currentLossStreak.count}
+            suffix="L"
             valueClass="text-red-400"
             tooltip={TIPS.currentLossStreak}
-          >
-            <PlayerLinks players={stats.streaks.currentLossStreak.players} />
-          </StatCard>
+            entries={stats.streaks.currentLossStreak.entries}
+            isWin={false}
+          />
         ) : (
           <NoData
             label="Current Longest Loss Streak"
@@ -642,14 +754,15 @@ export default function Stats() {
         )}
 
         {stats.streaks.longestLossStreak ? (
-          <StatCard
+          <StreakCard
             label="All-Time Longest Loss Streak"
-            value={`${stats.streaks.longestLossStreak.count}L`}
+            count={stats.streaks.longestLossStreak.count}
+            suffix="L"
             valueClass="text-red-400"
             tooltip={TIPS.longestLossStreak}
-          >
-            <PlayerLinks players={stats.streaks.longestLossStreak.players} />
-          </StatCard>
+            entries={stats.streaks.longestLossStreak.entries}
+            isWin={false}
+          />
         ) : (
           <NoData
             label="All-Time Longest Loss Streak"

@@ -84,12 +84,26 @@ export interface PlayerRef {
   name: string;
 }
 
+export interface StreakMatch {
+  opponent: PlayerRef;
+  playerScore: number | null;
+  opponentScore: number | null;
+  date: string;
+}
+
+export interface StreakEntry {
+  player: PlayerRef;
+  startDate: string;
+  endDate?: string;
+  matches: StreakMatch[];
+}
+
 export interface StatsResponse {
   streaks: {
-    currentWinStreak: { players: PlayerRef[]; count: number } | null;
-    longestWinStreak: { players: PlayerRef[]; count: number } | null;
-    currentLossStreak: { players: PlayerRef[]; count: number } | null;
-    longestLossStreak: { players: PlayerRef[]; count: number } | null;
+    currentWinStreak: { entries: StreakEntry[]; count: number } | null;
+    longestWinStreak: { entries: StreakEntry[]; count: number } | null;
+    currentLossStreak: { entries: StreakEntry[]; count: number } | null;
+    longestLossStreak: { entries: StreakEntry[]; count: number } | null;
   };
   matches: {
     biggestUpset: {
