@@ -735,7 +735,7 @@ export default function Stats() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {stats.rivalries.biggestRivalry ? (
           <StatCard
-            label="Biggest Rivalry"
+            label="Most Head-to-Head Matches"
             value={`${stats.rivalries.biggestRivalry.matches} matches`}
             valueClass="text-amber-400"
             tooltip={TIPS.biggestRivalry}
@@ -750,7 +750,7 @@ export default function Stats() {
             ))}
           </StatCard>
         ) : (
-          <NoData label="Biggest Rivalry" tooltip={TIPS.biggestRivalry} />
+          <NoData label="Most Head-to-Head Matches" tooltip={TIPS.biggestRivalry} />
         )}
 
         {stats.rivalries.dominator ? (
