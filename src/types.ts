@@ -99,6 +99,7 @@ export interface StatsResponse {
       matchDate: string;
     } | null;
     mostUpsetsCaused: { players: PlayerRef[]; count: number } | null;
+    highestWinRate: { players: PlayerRef[]; rate: number } | null;
   };
   players: {
     peakElo: { players: PlayerRef[]; elo: number } | null;

@@ -44,6 +44,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     climbs: number;
     defenses: number;
     upsetsCaused: number;
+    wins: number;
+    losses: number;
   };
 
   const acc = new Map<number, PlayerAcc>();
@@ -72,6 +74,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       climbs: 0,
       defenses: 0,
       upsetsCaused: 0,
+      wins: 0,
+      losses: 0,
     });
     eloHistory.set(p.id, [{ t: p.createdAt.toISOString(), elo: 1000 }]);
   }
@@ -134,6 +138,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       loser.peakElo = loser.currentElo;
       loser.peakDate = m.createdAt.toISOString();
     }
+
+    // Win/loss counters
+    winner.wins += 1;
+    loser.losses += 1;
 
     // Streaks
     winner.currentWinStreak += 1;
@@ -291,6 +299,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const bestDefender = pickAllMax(playerList, (p) => acc.get(p.id)!.defenses);
   const peak = pickAllMax(playerList, (p) => acc.get(p.id)!.peakElo);
   const currentTop = pickAllMax(playerList, (p) => acc.get(p.id)!.currentElo);
+  // Win-rate stat requires a minimum match count so a single lucky win
+  // doesn't crown someone at 100%.
+  const MIN_WIN_RATE_MATCHES = 10;
+  const highWinRate = pickAllMax(playerList, (p) => {
+    const a = acc.get(p.id)!;
+    const total = a.wins + a.losses;
+    if (total < MIN_WIN_RATE_MATCHES) return -1;
+    return a.wins / total;
+  });
   const climber = pickMax(playerList, (p) => {
     const a = acc.get(p.id)!;
     return a.currentElo - a.minElo;
@@ -395,6 +412,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         : null,
       mostUpsetsCaused: wrapCount(mostUpsets),
+      highestWinRate:
+        highWinRate && highWinRate.score >= 0
+          ? { players: highWinRate.players, rate: highWinRate.score }
+          : null,
     },
     players: {
       peakElo:

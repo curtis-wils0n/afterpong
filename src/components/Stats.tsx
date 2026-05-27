@@ -107,6 +107,8 @@ const TIPS = {
     'Single match where the winner gained the most ELO from one win',
   mostUpsetsCaused:
     'Career count of wins where the player was the underdog (gained more than 20 ELO)',
+  highestWinRate:
+    'Highest win percentage among players with at least 10 matches',
   mostSuccessfulClimbs:
     'Career count of challenge matches won as the lower-ranked challenger',
   bestDefender:
@@ -646,7 +648,7 @@ export default function Stats() {
 
       {/* Matches */}
       <h2 className="text-lg font-semibold mb-3">Matches</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {stats.matches.biggestUpset ? (
           <StatCard
             label="Biggest Upset"
@@ -677,6 +679,19 @@ export default function Stats() {
           </StatCard>
         ) : (
           <NoData label="Most Upsets Caused" tooltip={TIPS.mostUpsetsCaused} />
+        )}
+
+        {stats.matches.highestWinRate ? (
+          <StatCard
+            label="Highest Win Rate"
+            value={`${(stats.matches.highestWinRate.rate * 100).toFixed(1)}%`}
+            valueClass="text-emerald-400"
+            tooltip={TIPS.highestWinRate}
+          >
+            <PlayerLinks players={stats.matches.highestWinRate.players} />
+          </StatCard>
+        ) : (
+          <NoData label="Highest Win Rate" tooltip={TIPS.highestWinRate} />
         )}
       </div>
 
