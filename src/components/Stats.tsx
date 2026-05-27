@@ -116,6 +116,8 @@ const TIPS = {
   biggestRivalry: 'Pair of players with the most total matches between them',
   dominator:
     'Largest gap between wins and losses in any head-to-head matchup',
+  tightestRivalry:
+    'Closest head-to-head matchup, weighted to favor more games (each win-loss gap costs 3 matches of credit)',
   mostFriendly:
     'Player most often shown as the FRIEND badge on others’ profiles (most games together)',
   biggestVillain:
@@ -730,7 +732,7 @@ export default function Stats() {
 
       {/* Rivalries */}
       <h2 className="text-lg font-semibold mb-3">Rivalries</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {stats.rivalries.biggestRivalry ? (
           <StatCard
             label="Biggest Rivalry"
@@ -738,9 +740,14 @@ export default function Stats() {
             valueClass="text-amber-400"
             tooltip={TIPS.biggestRivalry}
           >
-            <PlayerLink player={stats.rivalries.biggestRivalry.p1} />
-            <span className="text-slate-600"> vs </span>
-            <PlayerLink player={stats.rivalries.biggestRivalry.p2} />
+            {stats.rivalries.biggestRivalry.pairs.map((pair, i) => (
+              <span key={`${pair.p1.id}-${pair.p2.id}`}>
+                {i > 0 && <span className="text-slate-600">, </span>}
+                <PlayerLink player={pair.p1} />
+                <span className="text-slate-600"> vs </span>
+                <PlayerLink player={pair.p2} />
+              </span>
+            ))}
           </StatCard>
         ) : (
           <NoData label="Biggest Rivalry" tooltip={TIPS.biggestRivalry} />
@@ -749,16 +756,51 @@ export default function Stats() {
         {stats.rivalries.dominator ? (
           <StatCard
             label="Dominator"
-            value={`${stats.rivalries.dominator.wins}-${stats.rivalries.dominator.losses}`}
+            value={
+              stats.rivalries.dominator.pairs.length === 1
+                ? `${stats.rivalries.dominator.pairs[0].wins}-${stats.rivalries.dominator.pairs[0].losses}`
+                : `+${stats.rivalries.dominator.gap}`
+            }
             valueClass="text-amber-400"
             tooltip={TIPS.dominator}
           >
-            <PlayerLink player={stats.rivalries.dominator.dominator} />
-            <span className="text-slate-600"> over </span>
-            <PlayerLink player={stats.rivalries.dominator.victim} />
+            {stats.rivalries.dominator.pairs.map((pair, i) => (
+              <span key={`${pair.dominator.id}-${pair.victim.id}`}>
+                {i > 0 && <span className="text-slate-600">, </span>}
+                <PlayerLink player={pair.dominator} />
+                <span className="text-slate-600"> over </span>
+                <PlayerLink player={pair.victim} />
+                {stats.rivalries.dominator!.pairs.length > 1 && (
+                  <span className="text-slate-600">
+                    {' '}
+                    ({pair.wins}-{pair.losses})
+                  </span>
+                )}
+              </span>
+            ))}
           </StatCard>
         ) : (
           <NoData label="Dominator" tooltip={TIPS.dominator} />
+        )}
+
+        {stats.rivalries.tightestRivalry ? (
+          <StatCard
+            label="Tightest Rivalry"
+            value={`${stats.rivalries.tightestRivalry.wins}-${stats.rivalries.tightestRivalry.losses}`}
+            valueClass="text-amber-400"
+            tooltip={TIPS.tightestRivalry}
+          >
+            {stats.rivalries.tightestRivalry.pairs.map((pair, i) => (
+              <span key={`${pair.leader.id}-${pair.trailer.id}`}>
+                {i > 0 && <span className="text-slate-600">, </span>}
+                <PlayerLink player={pair.leader} />
+                <span className="text-slate-600"> vs </span>
+                <PlayerLink player={pair.trailer} />
+              </span>
+            ))}
+          </StatCard>
+        ) : (
+          <NoData label="Tightest Rivalry" tooltip={TIPS.tightestRivalry} />
         )}
       </div>
 

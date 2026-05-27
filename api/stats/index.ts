@@ -352,40 +352,102 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Biggest rivalry and dominator
-  let biggestRivalry:
-    | { p1: PlayerRef; p2: PlayerRef; matches: number }
-    | null = null;
-  let dominator:
-    | { dominator: PlayerRef; victim: PlayerRef; wins: number; losses: number }
-    | null = null;
+  // Score `total - TIGHTNESS_GAP_WEIGHT * gap` rewards larger sample sizes
+  // while penalizing imbalance, so 9-8 (score 14) outranks 4-4 (score 8) but
+  // loses to 7-7 (score 14, tie-broken by gap → 7-7 wins).
+  const TIGHTNESS_GAP_WEIGHT = 3;
+
+  let biggestMatches = -Infinity;
+  const biggestPairs: { p1: PlayerRef; p2: PlayerRef }[] = [];
+  let maxGap = -Infinity;
+  const dominatorPairs: {
+    dominator: PlayerRef;
+    victim: PlayerRef;
+    wins: number;
+    losses: number;
+  }[] = [];
+  let tightestScore = -Infinity;
+  let tightestGap = Infinity;
+  const tightestPairs: { leader: PlayerRef; trailer: PlayerRef }[] = [];
+  let tightestWins = 0;
+  let tightestLosses = 0;
 
   for (const pair of pairMap.values()) {
     const total = pair.p1Wins + pair.p2Wins;
-    if (!biggestRivalry || total > biggestRivalry.matches) {
-      biggestRivalry = {
-        p1: getRef(pair.p1Id),
-        p2: getRef(pair.p2Id),
-        matches: total,
-      };
+    const gap = Math.abs(pair.p1Wins - pair.p2Wins);
+    const wins = Math.max(pair.p1Wins, pair.p2Wins);
+    const losses = Math.min(pair.p1Wins, pair.p2Wins);
+    const leaderSide = pair.p1Wins >= pair.p2Wins ? pair.p1Id : pair.p2Id;
+    const trailerSide = pair.p1Wins >= pair.p2Wins ? pair.p2Id : pair.p1Id;
+
+    // Biggest rivalry: most total matches.
+    if (total > biggestMatches) {
+      biggestMatches = total;
+      biggestPairs.length = 0;
+      biggestPairs.push({ p1: getRef(pair.p1Id), p2: getRef(pair.p2Id) });
+    } else if (total === biggestMatches) {
+      biggestPairs.push({ p1: getRef(pair.p1Id), p2: getRef(pair.p2Id) });
     }
 
-    // Dominator: pair with the largest absolute win gap.
+    // Dominator: largest absolute win gap. Records may differ across ties
+    // (e.g. 5-0 and 7-2 both have gap 5).
     if (pair.p1Wins !== pair.p2Wins) {
-      const wins = Math.max(pair.p1Wins, pair.p2Wins);
-      const losses = Math.min(pair.p1Wins, pair.p2Wins);
-      const gap = wins - losses;
-      const winnerSide = pair.p1Wins > pair.p2Wins ? pair.p1Id : pair.p2Id;
-      const loserSide = pair.p1Wins > pair.p2Wins ? pair.p2Id : pair.p1Id;
-      if (!dominator || gap > dominator.wins - dominator.losses) {
-        dominator = {
-          dominator: getRef(winnerSide),
-          victim: getRef(loserSide),
+      if (gap > maxGap) {
+        maxGap = gap;
+        dominatorPairs.length = 0;
+        dominatorPairs.push({
+          dominator: getRef(leaderSide),
+          victim: getRef(trailerSide),
           wins,
           losses,
-        };
+        });
+      } else if (gap === maxGap) {
+        dominatorPairs.push({
+          dominator: getRef(leaderSide),
+          victim: getRef(trailerSide),
+          wins,
+          losses,
+        });
       }
     }
+
+    // Tightest rivalry: max score, tie-break on smaller gap. After both
+    // tie-breakers, all tied pairs share the same wins/losses record.
+    const score = total - TIGHTNESS_GAP_WEIGHT * gap;
+    if (score > tightestScore || (score === tightestScore && gap < tightestGap)) {
+      tightestScore = score;
+      tightestGap = gap;
+      tightestWins = wins;
+      tightestLosses = losses;
+      tightestPairs.length = 0;
+      tightestPairs.push({
+        leader: getRef(leaderSide),
+        trailer: getRef(trailerSide),
+      });
+    } else if (score === tightestScore && gap === tightestGap) {
+      tightestPairs.push({
+        leader: getRef(leaderSide),
+        trailer: getRef(trailerSide),
+      });
+    }
   }
+
+  const biggestRivalry =
+    biggestPairs.length > 0
+      ? { pairs: biggestPairs, matches: biggestMatches }
+      : null;
+  const dominator =
+    dominatorPairs.length > 0
+      ? { pairs: dominatorPairs, gap: maxGap }
+      : null;
+  const tightestRivalry =
+    tightestPairs.length > 0
+      ? {
+          pairs: tightestPairs,
+          wins: tightestWins,
+          losses: tightestLosses,
+        }
+      : null;
 
   // Wrap multi-player count stats (null when score is 0)
   const wrapCount = (
@@ -460,6 +522,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rivalries: {
       biggestRivalry,
       dominator,
+      tightestRivalry,
     },
     relationships: {
       mostFriendly: wrapCount(mostFriendly),
