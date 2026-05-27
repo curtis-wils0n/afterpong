@@ -404,7 +404,7 @@ function EloHistoryChart({
               </LineChart>
             </ResponsiveContainer>
           </div>
-          <ul className="flex flex-col gap-0.5 py-1 text-xs select-none min-w-[80px] overflow-y-auto">
+          <ul className="thin-scrollbar flex flex-col gap-0.5 py-1 text-xs select-none min-w-[80px] overflow-y-auto">
             {eligibleSeries.map((s) => {
               const color = colorById.get(s.id) ?? '#94a3b8';
               const hidden = hiddenIds.has(s.id);
