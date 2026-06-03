@@ -41,6 +41,29 @@ function PlayerLinks({ players }: { players: PlayerRef[] }) {
   );
 }
 
+function RelationshipSubjects<T extends { player: PlayerRef }>({
+  subjects,
+  tooltip,
+}: {
+  subjects: T[];
+  tooltip: (subject: T) => React.ReactNode;
+}) {
+  return (
+    <>
+      {subjects.map((s, i) => (
+        <span key={s.player.id}>
+          {i > 0 && <span className="text-slate-600">, </span>}
+          <Tooltip align="center" widthClass="w-max max-w-[16rem]" content={tooltip(s)}>
+            <span className="underline decoration-dotted decoration-slate-600 underline-offset-2">
+              <PlayerLink player={s.player} />
+            </span>
+          </Tooltip>
+        </span>
+      ))}
+    </>
+  );
+}
+
 function StatCard({
   label,
   value,
@@ -952,7 +975,19 @@ export default function Stats() {
                 {e.with.length > 0 && (
                   <span className="text-slate-600">
                     {' '}
-                    · <PlayerLinks players={e.with} />
+                    ·{' '}
+                    <RelationshipSubjects
+                      subjects={e.with}
+                      tooltip={(s) => (
+                        <>
+                          <span className="font-mono tabular-nums text-slate-200">
+                            {s.matches}
+                          </span>{' '}
+                          {s.matches === 1 ? 'match' : 'matches'} with{' '}
+                          {e.player.name}
+                        </>
+                      )}
+                    />
                   </span>
                 )}
               </div>
@@ -975,7 +1010,19 @@ export default function Stats() {
                 {e.with.length > 0 && (
                   <span className="text-slate-600">
                     {' '}
-                    · <PlayerLinks players={e.with} />
+                    ·{' '}
+                    <RelationshipSubjects
+                      subjects={e.with}
+                      tooltip={(s) => (
+                        <>
+                          {e.player.name} drained{' '}
+                          <span className="font-mono tabular-nums text-red-400">
+                            {s.eloDrained}
+                          </span>{' '}
+                          ELO
+                        </>
+                      )}
+                    />
                   </span>
                 )}
               </div>
@@ -998,7 +1045,19 @@ export default function Stats() {
                 {e.with.length > 0 && (
                   <span className="text-slate-600">
                     {' '}
-                    · <PlayerLinks players={e.with} />
+                    ·{' '}
+                    <RelationshipSubjects
+                      subjects={e.with}
+                      tooltip={(s) => (
+                        <>
+                          {e.player.name}{' '}
+                          <span className="font-mono tabular-nums text-amber-400">
+                            {s.wins}–{s.losses}
+                          </span>{' '}
+                          vs {s.player.name}
+                        </>
+                      )}
+                    />
                   </span>
                 )}
               </div>

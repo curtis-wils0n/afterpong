@@ -595,18 +595,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
   };
 
-  // Wrap relationship stats with the list of players who chose each winner.
-  const wrapRelationship = (
+  // Head-to-head record of `aId` against `bId` (a's wins/losses vs b).
+  const h2hVs = (aId: number, bId: number): { wins: number; losses: number } => {
+    const e = playerH2H.get(aId)?.h2h.find((x) => x.opponentId === bId);
+    return { wins: e?.wins ?? 0, losses: e?.losses ?? 0 };
+  };
+
+  // Net ELO `drainerId` has taken off `victimId` across their matchups.
+  const eloDrainedFrom = (drainerId: number, victimId: number): number => {
+    const data = playerH2H.get(victimId);
+    if (!data) return 0;
+    const net = data.matches
+      .filter((m) => m.winnerId === drainerId || m.loserId === drainerId)
+      .reduce(
+        (sum, m) =>
+          sum + (m.winnerId === victimId ? m.winnerEloChange : m.loserEloChange),
+        0,
+      );
+    return Math.max(0, -net);
+  };
+
+  // Wrap relationship stats with the players who chose each winner, enriched
+  // with the pairwise metric and sorted strongest-first.
+  const wrapRelationship = <D extends object>(
     best: { players: PlayerRef[]; score: number } | null,
     fromMap: Map<number, number[]>,
+    detailFor: (winnerId: number, subjectId: number) => D,
+    sortKey: (detail: D) => number,
   ):
-    | { entries: { player: PlayerRef; with: PlayerRef[] }[]; count: number }
+    | {
+        entries: { player: PlayerRef; with: (D & { player: PlayerRef })[] }[];
+        count: number;
+      }
     | null => {
     if (!best || best.score <= 0) return null;
     return {
       entries: best.players.map((pl) => ({
         player: pl,
-        with: (fromMap.get(pl.id) ?? []).map(getRef),
+        with: (fromMap.get(pl.id) ?? [])
+          .map((subjectId) => ({
+            player: getRef(subjectId),
+            ...detailFor(pl.id, subjectId),
+          }))
+          .sort((a, b) => sortKey(b) - sortKey(a)),
       })),
       count: best.score,
     };
@@ -694,9 +725,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       tightestRivalry,
     },
     relationships: {
-      mostFriendly: wrapRelationship(mostFriendly, friendOf),
-      biggestVillain: wrapRelationship(biggestVillain, nemesisOf),
-      biggestOp: wrapRelationship(biggestOp, rivalOf),
+      // Most matches played together first.
+      mostFriendly: wrapRelationship(
+        mostFriendly,
+        friendOf,
+        (winnerId, subjectId) => {
+          const { wins, losses } = h2hVs(winnerId, subjectId);
+          return { matches: wins + losses };
+        },
+        (d) => d.matches,
+      ),
+      // Most ELO drained first.
+      biggestVillain: wrapRelationship(
+        biggestVillain,
+        nemesisOf,
+        (winnerId, subjectId) => ({
+          eloDrained: eloDrainedFrom(winnerId, subjectId),
+        }),
+        (d) => d.eloDrained,
+      ),
+      // Closest rivalry first (computeRival's tightness score: total - 3·gap).
+      biggestOp: wrapRelationship(
+        biggestOp,
+        rivalOf,
+        (winnerId, subjectId) => h2hVs(winnerId, subjectId),
+        (d) => d.wins + d.losses - 3 * Math.abs(d.wins - d.losses),
+      ),
     },
     eloHistory: {
       players: allPlayers.map((p) => ({
