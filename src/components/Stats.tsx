@@ -54,9 +54,7 @@ function RelationshipSubjects<T extends { player: PlayerRef }>({
         <span key={s.player.id}>
           {i > 0 && <span className="text-slate-600">, </span>}
           <Tooltip align="center" widthClass="w-max max-w-[16rem]" content={tooltip(s)}>
-            <span className="underline decoration-dotted decoration-slate-600 underline-offset-2">
-              <PlayerLink player={s.player} />
-            </span>
+            <PlayerLink player={s.player} />
           </Tooltip>
         </span>
       ))}
@@ -973,9 +971,8 @@ export default function Stats() {
               <div key={e.player.id}>
                 <PlayerLink player={e.player} />
                 {e.with.length > 0 && (
-                  <span className="text-slate-600">
-                    {' '}
-                    ·{' '}
+                  <>
+                    <span className="text-slate-600"> · </span>
                     <RelationshipSubjects
                       subjects={e.with}
                       tooltip={(s) => (
@@ -983,12 +980,11 @@ export default function Stats() {
                           <span className="font-mono tabular-nums text-slate-200">
                             {s.matches}
                           </span>{' '}
-                          {s.matches === 1 ? 'match' : 'matches'} with{' '}
-                          {e.player.name}
+                          {s.matches === 1 ? 'match' : 'matches'}
                         </>
                       )}
                     />
-                  </span>
+                  </>
                 )}
               </div>
             ))}
@@ -1008,22 +1004,20 @@ export default function Stats() {
               <div key={e.player.id}>
                 <PlayerLink player={e.player} />
                 {e.with.length > 0 && (
-                  <span className="text-slate-600">
-                    {' '}
-                    ·{' '}
+                  <>
+                    <span className="text-slate-600"> · </span>
                     <RelationshipSubjects
                       subjects={e.with}
                       tooltip={(s) => (
                         <>
-                          {e.player.name} drained{' '}
                           <span className="font-mono tabular-nums text-red-400">
-                            {s.eloDrained}
+                            -{s.eloDrained}
                           </span>{' '}
                           ELO
                         </>
                       )}
                     />
-                  </span>
+                  </>
                 )}
               </div>
             ))}
@@ -1043,9 +1037,8 @@ export default function Stats() {
               <div key={e.player.id}>
                 <PlayerLink player={e.player} />
                 {e.with.length > 0 && (
-                  <span className="text-slate-600">
-                    {' '}
-                    ·{' '}
+                  <>
+                    <span className="text-slate-600"> · </span>
                     <RelationshipSubjects
                       subjects={e.with}
                       tooltip={(s) => (
@@ -1054,11 +1047,11 @@ export default function Stats() {
                           <span className="font-mono tabular-nums text-amber-400">
                             {s.wins}–{s.losses}
                           </span>{' '}
-                          vs {s.player.name}
+                          {s.player.name}
                         </>
                       )}
                     />
-                  </span>
+                  </>
                 )}
               </div>
             ))}
