@@ -41,6 +41,27 @@ function PlayerLinks({ players }: { players: PlayerRef[] }) {
   );
 }
 
+function RelationshipSubjects<T extends { player: PlayerRef }>({
+  subjects,
+  tooltip,
+}: {
+  subjects: T[];
+  tooltip: (subject: T) => React.ReactNode;
+}) {
+  return (
+    <>
+      {subjects.map((s, i) => (
+        <span key={s.player.id}>
+          {i > 0 && <span className="text-slate-600">, </span>}
+          <Tooltip align="center" widthClass="w-max max-w-[16rem]" content={tooltip(s)}>
+            <PlayerLink player={s.player} />
+          </Tooltip>
+        </span>
+      ))}
+    </>
+  );
+}
+
 function StatCard({
   label,
   value,
@@ -950,10 +971,20 @@ export default function Stats() {
               <div key={e.player.id}>
                 <PlayerLink player={e.player} />
                 {e.with.length > 0 && (
-                  <span className="text-slate-600">
-                    {' '}
-                    · <PlayerLinks players={e.with} />
-                  </span>
+                  <>
+                    <span className="text-slate-600"> · </span>
+                    <RelationshipSubjects
+                      subjects={e.with}
+                      tooltip={(s) => (
+                        <>
+                          <span className="font-mono tabular-nums text-slate-200">
+                            {s.matches}
+                          </span>{' '}
+                          {s.matches === 1 ? 'match' : 'matches'}
+                        </>
+                      )}
+                    />
+                  </>
                 )}
               </div>
             ))}
@@ -973,10 +1004,20 @@ export default function Stats() {
               <div key={e.player.id}>
                 <PlayerLink player={e.player} />
                 {e.with.length > 0 && (
-                  <span className="text-slate-600">
-                    {' '}
-                    · <PlayerLinks players={e.with} />
-                  </span>
+                  <>
+                    <span className="text-slate-600"> · </span>
+                    <RelationshipSubjects
+                      subjects={e.with}
+                      tooltip={(s) => (
+                        <>
+                          <span className="font-mono tabular-nums text-red-400">
+                            -{s.eloDrained}
+                          </span>{' '}
+                          ELO
+                        </>
+                      )}
+                    />
+                  </>
                 )}
               </div>
             ))}
@@ -996,10 +1037,21 @@ export default function Stats() {
               <div key={e.player.id}>
                 <PlayerLink player={e.player} />
                 {e.with.length > 0 && (
-                  <span className="text-slate-600">
-                    {' '}
-                    · <PlayerLinks players={e.with} />
-                  </span>
+                  <>
+                    <span className="text-slate-600"> · </span>
+                    <RelationshipSubjects
+                      subjects={e.with}
+                      tooltip={(s) => (
+                        <>
+                          {e.player.name}{' '}
+                          <span className="font-mono tabular-nums text-amber-400">
+                            {s.wins}–{s.losses}
+                          </span>{' '}
+                          {s.player.name}
+                        </>
+                      )}
+                    />
+                  </>
                 )}
               </div>
             ))}

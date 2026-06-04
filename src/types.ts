@@ -166,15 +166,24 @@ export interface StatsResponse {
   };
   relationships: {
     mostFriendly: {
-      entries: { player: PlayerRef; with: PlayerRef[] }[];
+      entries: {
+        player: PlayerRef;
+        with: { player: PlayerRef; matches: number }[];
+      }[];
       count: number;
     } | null;
     biggestVillain: {
-      entries: { player: PlayerRef; with: PlayerRef[] }[];
+      entries: {
+        player: PlayerRef;
+        with: { player: PlayerRef; eloDrained: number }[];
+      }[];
       count: number;
     } | null;
     biggestOp: {
-      entries: { player: PlayerRef; with: PlayerRef[] }[];
+      entries: {
+        player: PlayerRef;
+        with: { player: PlayerRef; wins: number; losses: number }[];
+      }[];
       count: number;
     } | null;
   };
