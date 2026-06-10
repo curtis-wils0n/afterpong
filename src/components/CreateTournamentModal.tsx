@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { seedParticipants, buildRoundOneSlots } from '../../lib/bracket';
+import { conservativeRating } from '../../lib/glicko';
 import type { Player, TournamentSeeding } from '../types';
 
 interface Props {
@@ -20,7 +21,7 @@ export default function CreateTournamentModal({ onClose, onCreated }: Props) {
 
   useEffect(() => {
     api.players
-      .list('elo')
+      .list('rating')
       .then(setPlayers)
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load players'));
   }, []);
@@ -41,7 +42,7 @@ export default function CreateTournamentModal({ onClose, onCreated }: Props) {
   const previewSeeds = useMemo(() => {
     if (seeding !== 'snake') return [];
     return seedParticipants(
-      selectedPlayers.map((p) => ({ id: p.id, elo: p.elo })),
+      selectedPlayers.map((p) => ({ id: p.id, rating: conservativeRating(p) })),
       'snake',
     );
   }, [selectedPlayers, seeding]);
@@ -109,7 +110,7 @@ export default function CreateTournamentModal({ onClose, onCreated }: Props) {
                       : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:border-slate-500'
                   }`}
                 >
-                  {s === 'snake' ? 'Snake (by ELO)' : 'Random'}
+                  {s === 'snake' ? 'Snake (by rating)' : 'Random'}
                 </button>
               ))}
             </div>
@@ -138,7 +139,7 @@ export default function CreateTournamentModal({ onClose, onCreated }: Props) {
                       {isSelected ? '✓' : ''}
                     </span>
                     {p.name}{' '}
-                    <span className="text-slate-600 text-xs">({p.elo})</span>
+                    <span className="text-slate-600 text-xs">({Math.round(conservativeRating(p))})</span>
                   </button>
                 );
               })}

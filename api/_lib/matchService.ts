@@ -1,7 +1,7 @@
 import { eq, and, gt, lt } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { players, matches } from '../../db/schema.js';
-import { calculateEloChange } from '../../lib/elo.js';
+import { inflateRd, rateMatch, daysBetween } from '../../lib/glicko.js';
 
 export interface CreateMatchInput {
   winnerId: number;
@@ -14,13 +14,14 @@ export interface CreateMatchInput {
 }
 
 export type CreateMatchResult =
-  | { ok: true; match: typeof matches.$inferSelect; winner: { id: number; elo: number; challengeRank: number | null }; loser: { id: number; elo: number; challengeRank: number | null } }
+  | { ok: true; match: typeof matches.$inferSelect; winner: { id: number; rating: number; challengeRank: number | null }; loser: { id: number; rating: number; challengeRank: number | null } }
   | { ok: false; status: number; error: string };
 
 /**
- * Creates a match: validates inputs, computes ELO change, inserts the match row,
- * updates player ELOs, and (for challenge matches) swaps challenge ranks if the
- * lower-ranked player won. Returns enough info to build the API response.
+ * Creates a match: validates inputs, computes Glicko-2 rating updates, inserts
+ * the match row (with pre-match rating snapshots for undo), updates players,
+ * and (for challenge matches) swaps challenge ranks if the lower-ranked player
+ * won. Returns enough info to build the API response.
  */
 export async function createMatch(
   input: CreateMatchInput,
@@ -123,10 +124,20 @@ export async function createMatch(
     seriesLoserScore = gamesWonByLoser;
   }
 
-  const { winnerChange, loserChange } = calculateEloChange(
-    winner.elo,
-    loser.elo,
+  // Inflate each player's RD for time spent idle, then rate the match against
+  // the inflated states. Snapshots store the *raw* pre-match row values so
+  // undo restores them exactly (the idle inflation re-applies naturally on
+  // their next match).
+  const now = new Date();
+  const winnerPre = inflateRd(
+    { rating: winner.rating, rd: winner.rd, volatility: winner.volatility },
+    daysBetween(winner.lastMatchAt, now),
   );
+  const loserPre = inflateRd(
+    { rating: loser.rating, rd: loser.rd, volatility: loser.volatility },
+    daysBetween(loser.lastMatchAt, now),
+  );
+  const rated = rateMatch(winnerPre, loserPre);
 
   const [match] = await db
     .insert(matches)
@@ -135,24 +146,43 @@ export async function createMatch(
       loserId,
       winnerScore: seriesWinnerScore,
       loserScore: seriesLoserScore,
-      winnerEloChange: winnerChange,
-      loserEloChange: loserChange,
+      winnerRatingChange: rated.winner.rating - winner.rating,
+      loserRatingChange: rated.loser.rating - loser.rating,
+      winnerRatingBefore: winner.rating,
+      winnerRdBefore: winner.rd,
+      winnerVolBefore: winner.volatility,
+      winnerLastMatchBefore: winner.lastMatchAt,
+      loserRatingBefore: loser.rating,
+      loserRdBefore: loser.rd,
+      loserVolBefore: loser.volatility,
+      loserLastMatchBefore: loser.lastMatchAt,
       isChallenge: !!isChallenge,
       games: validatedGames,
       winnerRankBefore: winner.challengeRank,
       loserRankBefore: loser.challengeRank,
       tournamentMatchId: tournamentMatchId ?? null,
+      createdAt: now,
     })
     .returning();
 
   await Promise.all([
     db
       .update(players)
-      .set({ elo: winner.elo + winnerChange })
+      .set({
+        rating: rated.winner.rating,
+        rd: rated.winner.rd,
+        volatility: rated.winner.volatility,
+        lastMatchAt: now,
+      })
       .where(eq(players.id, winnerId)),
     db
       .update(players)
-      .set({ elo: loser.elo + loserChange })
+      .set({
+        rating: rated.loser.rating,
+        rd: rated.loser.rd,
+        volatility: rated.loser.volatility,
+        lastMatchAt: now,
+      })
       .where(eq(players.id, loserId)),
   ]);
 
@@ -184,12 +214,12 @@ export async function createMatch(
     match,
     winner: {
       id: winner.id,
-      elo: winner.elo + winnerChange,
+      rating: rated.winner.rating,
       challengeRank: updatedWinnerRank,
     },
     loser: {
       id: loser.id,
-      elo: loser.elo + loserChange,
+      rating: rated.loser.rating,
       challengeRank: updatedLoserRank,
     },
   };

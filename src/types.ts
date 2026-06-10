@@ -1,7 +1,10 @@
 export interface Player {
   id: number;
   name: string;
-  elo: number;
+  rating: number;
+  rd: number;
+  volatility: number;
+  lastMatchAt: string | null;
   challengeRank: number | null;
   onVacation: boolean;
   createdAt: string;
@@ -22,8 +25,14 @@ export interface Match {
   loserId: number;
   winnerScore: number | null;
   loserScore: number | null;
-  winnerEloChange: number;
-  loserEloChange: number;
+  winnerRatingChange: number;
+  loserRatingChange: number;
+  winnerRatingBefore: number | null;
+  winnerRdBefore: number | null;
+  winnerVolBefore: number | null;
+  loserRatingBefore: number | null;
+  loserRdBefore: number | null;
+  loserVolBefore: number | null;
   isChallenge: boolean;
   games: GameScore[] | null;
   tournamentMatchId: number | null;
@@ -112,7 +121,7 @@ export interface StatsResponse {
         loser: PlayerRef;
         matchDate: string;
       }[];
-      eloGain: number;
+      winnerOdds: number;
     } | null;
     mostUpsetsCaused: { players: PlayerRef[]; count: number } | null;
     highestWinRate: {
@@ -121,8 +130,8 @@ export interface StatsResponse {
     } | null;
   };
   players: {
-    peakElo: { players: PlayerRef[]; elo: number } | null;
-    currentTopElo: { players: PlayerRef[]; elo: number } | null;
+    peakRating: { players: PlayerRef[]; rating: number } | null;
+    currentTopRating: { players: PlayerRef[]; rating: number } | null;
     biggestClimber: {
       entries: { player: PlayerRef; from: number; to: number }[];
       climb: number;
@@ -175,7 +184,7 @@ export interface StatsResponse {
     biggestVillain: {
       entries: {
         player: PlayerRef;
-        with: { player: PlayerRef; eloDrained: number }[];
+        with: { player: PlayerRef; ratingDrained: number }[];
       }[];
       count: number;
     } | null;
@@ -187,11 +196,11 @@ export interface StatsResponse {
       count: number;
     } | null;
   };
-  eloHistory: {
+  ratingHistory: {
     players: {
       id: number;
       name: string;
-      points: { t: string; elo: number }[];
+      points: { t: string; rating: number }[];
     }[];
   };
 }

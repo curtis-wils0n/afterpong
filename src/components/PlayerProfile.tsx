@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { isUpset, calculateExpectedScore } from '../../lib/elo';
+import { isUpset, expectedScore, conservativeRating } from '../../lib/glicko';
 import {
   computeNemesis,
   computeRival,
@@ -56,45 +56,47 @@ export default function PlayerProfile() {
       ? Math.round((player.wins / (player.wins + player.losses)) * 100)
       : 0;
 
-  const sumEloChange = (count: number) =>
-    player.matches.slice(0, count).reduce(
-      (sum, m) =>
-        sum + (m.winnerId === player.id ? m.winnerEloChange : m.loserEloChange),
-      0,
+  const sumRatingChange = (count: number) =>
+    Math.round(
+      player.matches.slice(0, count).reduce(
+        (sum, m) =>
+          sum + (m.winnerId === player.id ? m.winnerRatingChange : m.loserRatingChange),
+        0,
+      ),
     );
 
-  const streakElo = player.streak ? sumEloChange(player.streak.count) : 0;
-  const recentFormElo = sumEloChange(player.recentForm.length);
+  const streakRating = player.streak ? sumRatingChange(player.streak.count) : 0;
+  const recentFormRating = sumRatingChange(player.recentForm.length);
 
   const opponentMap = new Map<number, string>();
   player.headToHead.forEach((h) => {
     opponentMap.set(h.opponent.id, h.opponent.name);
   });
 
-  // Compute ELO history from matches (oldest to newest)
-  const eloHistory = (() => {
+  // Compute rating history from matches (oldest to newest)
+  const ratingHistory = (() => {
     if (player.matches.length === 0) return [];
 
     const chronological = [...player.matches].reverse();
-    let startElo = player.elo;
+    let startRating = player.rating;
     for (const m of player.matches) {
-      const change = m.winnerId === player.id ? m.winnerEloChange : m.loserEloChange;
-      startElo -= change;
+      const change = m.winnerId === player.id ? m.winnerRatingChange : m.loserRatingChange;
+      startRating -= change;
     }
 
-    const points: { label: string; elo: number; opponent: string; date: string }[] = [
-      { label: 'Start', elo: startElo, opponent: '', date: '' },
+    const points: { label: string; rating: number; opponent: string; date: string }[] = [
+      { label: 'Start', rating: Math.round(startRating), opponent: '', date: '' },
     ];
 
-    let currentElo = startElo;
+    let currentRating = startRating;
     for (const m of chronological) {
       const won = m.winnerId === player.id;
-      const change = won ? m.winnerEloChange : m.loserEloChange;
-      currentElo += change;
+      const change = won ? m.winnerRatingChange : m.loserRatingChange;
+      currentRating += change;
       const opponentId = won ? m.loserId : m.winnerId;
       points.push({
         label: `#${points.length}`,
-        elo: currentElo,
+        rating: Math.round(currentRating),
         opponent: opponentMap.get(opponentId) || `Player #${opponentId}`,
         date: new Date(m.createdAt).toLocaleDateString('en-US', {
           month: 'short',
@@ -106,11 +108,11 @@ export default function PlayerProfile() {
     return points;
   })();
 
-  const peakElo = eloHistory.length > 0
-    ? Math.max(...eloHistory.map((p) => p.elo))
+  const peakRating = ratingHistory.length > 0
+    ? Math.max(...ratingHistory.map((p) => p.rating))
     : null;
-  const minElo = eloHistory.length > 0
-    ? Math.min(...eloHistory.map((p) => p.elo))
+  const minRating = ratingHistory.length > 0
+    ? Math.min(...ratingHistory.map((p) => p.rating))
     : null;
 
   return (
@@ -140,15 +142,22 @@ export default function PlayerProfile() {
               </span>
             )}
           </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-mono font-bold">{player.elo}</span>
-            {peakElo != null && minElo != null && (
-              <span className="text-xs font-mono tabular-nums text-slate-600">
-                <span className="text-emerald-400/40">▲{peakElo}</span>
-                {' '}
-                <span className="text-red-400/40">▼{minElo}</span>
+          <div className="text-right">
+            <div className="flex items-baseline gap-2 justify-end">
+              <span className="text-3xl font-mono font-bold">
+                {Math.round(conservativeRating(player))}
               </span>
-            )}
+              {peakRating != null && minRating != null && (
+                <span className="text-xs font-mono tabular-nums text-slate-600">
+                  <span className="text-emerald-400/40">▲{peakRating}</span>
+                  {' '}
+                  <span className="text-red-400/40">▼{minRating}</span>
+                </span>
+              )}
+            </div>
+            <span className="text-xs font-mono text-slate-500 tabular-nums">
+              skill {Math.round(player.rating)} ±{Math.round(player.rd)}
+            </span>
           </div>
         </div>
         {(isAdmin || player.onVacation) && (
@@ -212,12 +221,12 @@ export default function PlayerProfile() {
         </div>
       </div>
 
-      {/* ELO Chart */}
-      {eloHistory.length > 1 && (
+      {/* Rating Chart */}
+      {ratingHistory.length > 1 && (
         <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-6">
-          <h3 className="text-sm text-slate-400 mb-3">ELO History</h3>
+          <h3 className="text-sm text-slate-400 mb-3">Rating History</h3>
           <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={eloHistory}>
+            <LineChart data={ratingHistory}>
               <XAxis dataKey="label" hide />
               <YAxis
                 domain={['dataMin - 20', 'dataMax + 20']}
@@ -234,7 +243,7 @@ export default function PlayerProfile() {
                   fontSize: '13px',
                 }}
                 labelStyle={{ display: 'none' }}
-                formatter={(value) => [`${value}`, 'ELO']}
+                formatter={(value) => [`${value}`, 'Rating']}
                 labelFormatter={(_label, payload) => {
                   const data = payload?.[0]?.payload as { opponent?: string; date?: string } | undefined;
                   if (!data?.opponent) return '';
@@ -243,7 +252,7 @@ export default function PlayerProfile() {
               />
               <Line
                 type="monotone"
-                dataKey="elo"
+                dataKey="rating"
                 stroke="#10b981"
                 strokeWidth={2}
                 dot={false}
@@ -267,10 +276,10 @@ export default function PlayerProfile() {
                 {player.streak.type}
               </span>
               <span
-                className={`text-sm font-mono tabular-nums ${streakElo >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                className={`text-sm font-mono tabular-nums ${streakRating >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
               >
-                {streakElo >= 0 ? '+' : ''}
-                {streakElo}
+                {streakRating >= 0 ? '+' : ''}
+                {streakRating}
               </span>
             </div>
           ) : (
@@ -296,10 +305,10 @@ export default function PlayerProfile() {
                 ))}
               </div>
               <span
-                className={`text-sm font-mono tabular-nums ${recentFormElo >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                className={`text-sm font-mono tabular-nums ${recentFormRating >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
               >
-                {recentFormElo >= 0 ? '+' : ''}
-                {recentFormElo}
+                {recentFormRating >= 0 ? '+' : ''}
+                {recentFormRating}
               </span>
             </div>
           ) : (
@@ -340,12 +349,14 @@ export default function PlayerProfile() {
                     m.loserId === h2h.opponent.id,
                 );
 
-                const netElo = h2hMatches.reduce((sum, m) => {
-                  const change = m.winnerId === player.id
-                    ? m.winnerEloChange
-                    : m.loserEloChange;
-                  return sum + change;
-                }, 0);
+                const netRating = Math.round(
+                  h2hMatches.reduce((sum, m) => {
+                    const change = m.winnerId === player.id
+                      ? m.winnerRatingChange
+                      : m.loserRatingChange;
+                    return sum + change;
+                  }, 0),
+                );
 
                 const totalGames = h2h.wins + h2h.losses;
                 const actualPct =
@@ -353,7 +364,7 @@ export default function PlayerProfile() {
                     ? Math.round((h2h.wins / totalGames) * 100)
                     : 0;
                 const expectedPct = Math.round(
-                  calculateExpectedScore(player.elo, h2h.opponent.elo) * 100,
+                  expectedScore(player, h2h.opponent) * 100,
                 );
 
                 return (
@@ -431,8 +442,8 @@ export default function PlayerProfile() {
                           </span>
                         </HoverTooltip>
                         <span className="text-slate-700">|</span>
-                        <span className={`text-xs font-mono tabular-nums ${netElo >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {netElo >= 0 ? '+' : ''}{netElo}
+                        <span className={`text-xs font-mono tabular-nums ${netRating >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {netRating >= 0 ? '+' : ''}{netRating}
                         </span>
                         <span className="text-slate-500 text-xs">
                           {isExpanded ? '\u25B2' : '\u25BC'}
@@ -445,9 +456,9 @@ export default function PlayerProfile() {
                       >
                         {h2hMatches.map((match) => {
                           const won = match.winnerId === player.id;
-                          const eloChange = won
-                            ? match.winnerEloChange
-                            : match.loserEloChange;
+                          const ratingChange = Math.round(
+                            won ? match.winnerRatingChange : match.loserRatingChange,
+                          );
                           return (
                             <div
                               key={match.id}
@@ -498,10 +509,10 @@ export default function PlayerProfile() {
                                 )}
                               </div>
                               <span
-                                className={`text-sm font-mono tabular-nums ${eloChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                                className={`text-sm font-mono tabular-nums ${ratingChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
                               >
-                                {eloChange >= 0 ? '+' : ''}
-                                {eloChange}
+                                {ratingChange >= 0 ? '+' : ''}
+                                {ratingChange}
                               </span>
                             </div>
                           );
@@ -522,9 +533,9 @@ export default function PlayerProfile() {
           <div className="space-y-2">
             {player.matches.map((match) => {
               const won = match.winnerId === player.id;
-              const eloChange = won
-                ? match.winnerEloChange
-                : match.loserEloChange;
+              const ratingChange = Math.round(
+                won ? match.winnerRatingChange : match.loserRatingChange,
+              );
               const opponentId = won ? match.loserId : match.winnerId;
               const opponentName =
                 opponentMap.get(opponentId) || `Player #${opponentId}`;
@@ -592,10 +603,10 @@ export default function PlayerProfile() {
                         </span>
                       )}
                       <span
-                        className={`text-sm font-mono tabular-nums ${eloChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                        className={`text-sm font-mono tabular-nums ${ratingChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
                       >
-                        {eloChange >= 0 ? '+' : ''}
-                        {eloChange}
+                        {ratingChange >= 0 ? '+' : ''}
+                        {ratingChange}
                       </span>
                     </div>
                   </div>

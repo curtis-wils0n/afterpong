@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import { conservativeRating } from '../../lib/glicko';
 import type { Player } from '../types';
 import LogMatchModal from './LogMatchModal';
+
+const displayRating = (p: Player) => Math.round(conservativeRating(p));
 
 export default function Leaderboard() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -13,7 +16,7 @@ export default function Leaderboard() {
 
   const fetchPlayers = async () => {
     try {
-      const data = await api.players.list('elo', true);
+      const data = await api.players.list('rating', true);
       setPlayers(data);
     } catch (err) {
       console.error('Failed to fetch players:', err);
@@ -46,7 +49,7 @@ export default function Leaderboard() {
   for (let i = 0; i < players.length; i++) {
     if (i === 0) {
       displayRanks.push(1);
-    } else if (players[i].elo === players[i - 1].elo) {
+    } else if (displayRating(players[i]) === displayRating(players[i - 1])) {
       displayRanks.push(displayRanks[i - 1]);
     } else {
       displayRanks.push(i + 1);
@@ -137,8 +140,13 @@ export default function Leaderboard() {
                   <span className="text-red-400">{player.losses}L</span>
                 </span>
               )}
-              <span className="text-lg font-mono font-bold tabular-nums">
-                {player.elo}
+              <span className="text-right">
+                <span className="block text-lg font-mono font-bold tabular-nums leading-tight">
+                  {displayRating(player)}
+                </span>
+                <span className="block text-[10px] font-mono text-slate-500 tabular-nums leading-tight">
+                  {Math.round(player.rating)} ±{Math.round(player.rd)}
+                </span>
               </span>
             </Link>
           ))}

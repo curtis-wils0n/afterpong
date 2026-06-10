@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { db } from '../../db/index.js';
 import { players, matches } from '../../db/schema.js';
 import { asc } from 'drizzle-orm';
-import { isUpset } from '../../lib/elo.js';
+import { isUpset, expectedScore } from '../../lib/glicko.js';
 import {
   computeNemesis,
   computeRival,
@@ -39,10 +39,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     date: string;
   };
   type PlayerAcc = {
-    currentElo: number;
-    peakElo: number;
+    currentRating: number;
+    peakRating: number;
     peakDate: string;
-    minElo: number;
+    minRating: number;
     currentWinStreak: number;
     currentLossStreak: number;
     longestWinStreak: number;
@@ -65,11 +65,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   };
 
   const acc = new Map<number, PlayerAcc>();
-  const eloHistory = new Map<number, { t: string; elo: number }[]>();
-  // Per-player daily start/end ELO, keyed by Mountain-time day (YYYY-MM-DD).
-  // Updated as matches are processed in chronological order, so endElo lands
+  const ratingHistory = new Map<number, { t: string; rating: number }[]>();
+  // Per-player daily start/end rating, keyed by Mountain-time day (YYYY-MM-DD).
+  // Updated as matches are processed in chronological order, so endRating lands
   // on the last match of the day.
-  type DailyAcc = { day: string; startElo: number; endElo: number };
+  type DailyAcc = { day: string; startRating: number; endRating: number };
   const dailyByPlayer = new Map<number, Map<string, DailyAcc>>();
   const mtDayFmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Denver',
@@ -79,10 +79,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   });
   for (const p of allPlayers) {
     acc.set(p.id, {
-      currentElo: 1000,
-      peakElo: 1000,
+      currentRating: 1500,
+      peakRating: 1500,
       peakDate: p.createdAt.toISOString(),
-      minElo: 1000,
+      minRating: 1500,
       currentWinStreak: 0,
       currentLossStreak: 0,
       longestWinStreak: 0,
@@ -103,7 +103,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       wins: 0,
       losses: 0,
     });
-    eloHistory.set(p.id, [{ t: p.createdAt.toISOString(), elo: 1000 }]);
+    ratingHistory.set(p.id, [{ t: p.createdAt.toISOString(), rating: 1500 }]);
   }
 
   // Rivalry pair map
@@ -112,7 +112,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     { p1Id: number; p2Id: number; p1Wins: number; p2Wins: number }
   >();
 
-  let biggestUpsetGain = -Infinity;
+  let lowestUpsetOdds = Infinity;
   const biggestUpsetMatches: (typeof allMatches)[number][] = [];
 
   // Single chronological pass
@@ -121,21 +121,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const loser = acc.get(m.loserId);
     if (!winner || !loser) continue;
 
-    // Update ELO
-    const winnerEloBefore = winner.currentElo;
-    const loserEloBefore = loser.currentElo;
-    winner.currentElo += m.winnerEloChange;
-    loser.currentElo += m.loserEloChange;
+    // Update rating
+    const winnerRatingBeforeAcc = winner.currentRating;
+    const loserRatingBeforeAcc = loser.currentRating;
+    winner.currentRating += m.winnerRatingChange;
+    loser.currentRating += m.loserRatingChange;
 
     const ts = m.createdAt.toISOString();
-    eloHistory.get(m.winnerId)!.push({ t: ts, elo: winner.currentElo });
-    eloHistory.get(m.loserId)!.push({ t: ts, elo: loser.currentElo });
+    ratingHistory.get(m.winnerId)!.push({ t: ts, rating: Math.round(winner.currentRating) });
+    ratingHistory.get(m.loserId)!.push({ t: ts, rating: Math.round(loser.currentRating) });
 
-    // Daily start/end ELO buckets (Mountain-time day)
+    // Daily start/end rating buckets (Mountain-time day)
     const mtDay = mtDayFmt.format(m.createdAt);
     for (const [pid, before, after] of [
-      [m.winnerId, winnerEloBefore, winner.currentElo],
-      [m.loserId, loserEloBefore, loser.currentElo],
+      [m.winnerId, winnerRatingBeforeAcc, winner.currentRating],
+      [m.loserId, loserRatingBeforeAcc, loser.currentRating],
     ] as const) {
       let dayMap = dailyByPlayer.get(pid);
       if (!dayMap) {
@@ -144,25 +144,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const existing = dayMap.get(mtDay);
       if (!existing) {
-        dayMap.set(mtDay, { day: mtDay, startElo: before, endElo: after });
+        dayMap.set(mtDay, { day: mtDay, startRating: before, endRating: after });
       } else {
-        existing.endElo = after;
+        existing.endRating = after;
       }
     }
 
     // Track peak and min
-    if (winner.currentElo > winner.peakElo) {
-      winner.peakElo = winner.currentElo;
+    if (winner.currentRating > winner.peakRating) {
+      winner.peakRating = winner.currentRating;
       winner.peakDate = m.createdAt.toISOString();
     }
-    if (loser.currentElo < loser.minElo) {
-      loser.minElo = loser.currentElo;
+    if (loser.currentRating < loser.minRating) {
+      loser.minRating = loser.currentRating;
     }
-    if (winner.currentElo < winner.minElo) {
-      winner.minElo = winner.currentElo;
+    if (winner.currentRating < winner.minRating) {
+      winner.minRating = winner.currentRating;
     }
-    if (loser.currentElo > loser.peakElo) {
-      loser.peakElo = loser.currentElo;
+    if (loser.currentRating > loser.peakRating) {
+      loser.peakRating = loser.currentRating;
       loser.peakDate = m.createdAt.toISOString();
     }
 
@@ -232,13 +232,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Biggest upset (collect all matches tied at the max ELO gain)
-    if (m.winnerEloChange > biggestUpsetGain) {
-      biggestUpsetGain = m.winnerEloChange;
-      biggestUpsetMatches.length = 0;
-      biggestUpsetMatches.push(m);
-    } else if (m.winnerEloChange === biggestUpsetGain) {
-      biggestUpsetMatches.push(m);
+    // Biggest upset: the win with the lowest pre-match win probability
+    // (collect all matches tied at the minimum).
+    if (
+      m.winnerRatingBefore != null &&
+      m.winnerRdBefore != null &&
+      m.loserRatingBefore != null &&
+      m.loserRdBefore != null
+    ) {
+      const winnerOdds = expectedScore(
+        { rating: m.winnerRatingBefore, rd: m.winnerRdBefore },
+        { rating: m.loserRatingBefore, rd: m.loserRdBefore },
+      );
+      if (winnerOdds < lowestUpsetOdds - 1e-9) {
+        lowestUpsetOdds = winnerOdds;
+        biggestUpsetMatches.length = 0;
+        biggestUpsetMatches.push(m);
+      } else if (Math.abs(winnerOdds - lowestUpsetOdds) <= 1e-9) {
+        biggestUpsetMatches.push(m);
+      }
     }
 
     // Rivalry
@@ -360,8 +372,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   );
   const biggestOp = pickAllMax(playerList, (p) => rivalCounts.get(p.id) ?? 0);
   const bestDefender = pickAllMax(playerList, (p) => acc.get(p.id)!.defenses);
-  const peak = pickAllMax(playerList, (p) => acc.get(p.id)!.peakElo);
-  const currentTop = pickAllMax(playerList, (p) => acc.get(p.id)!.currentElo);
+  const peak = pickAllMax(playerList, (p) => acc.get(p.id)!.peakRating);
+  const currentTop = pickAllMax(playerList, (p) => acc.get(p.id)!.currentRating);
   // Win-rate stat requires a minimum match count so a single lucky win
   // doesn't crown someone at 100%.
   const MIN_WIN_RATE_MATCHES = 10;
@@ -373,11 +385,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   });
   const climber = pickAllMax(playerList, (p) => {
     const a = acc.get(p.id)!;
-    return a.currentElo - a.minElo;
+    return a.currentRating - a.minRating;
   });
   const faller = pickAllMax(playerList, (p) => {
     const a = acc.get(p.id)!;
-    return a.peakElo - a.currentElo;
+    return a.peakRating - a.currentRating;
   });
 
   type DailyEntry = {
@@ -392,7 +404,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const dailyFallEntries: DailyEntry[] = [];
   for (const [pid, days] of dailyByPlayer) {
     for (const d of days.values()) {
-      const delta = d.endElo - d.startElo;
+      const delta = d.endRating - d.startRating;
       if (delta > 0) {
         if (delta > bestDailyClimb) {
           bestDailyClimb = delta;
@@ -400,15 +412,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           dailyClimbEntries.push({
             player: getRef(pid),
             day: d.day,
-            from: d.startElo,
-            to: d.endElo,
+            from: Math.round(d.startRating),
+            to: Math.round(d.endRating),
           });
         } else if (delta === bestDailyClimb) {
           dailyClimbEntries.push({
             player: getRef(pid),
             day: d.day,
-            from: d.startElo,
-            to: d.endElo,
+            from: Math.round(d.startRating),
+            to: Math.round(d.endRating),
           });
         }
       } else if (delta < 0) {
@@ -419,15 +431,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           dailyFallEntries.push({
             player: getRef(pid),
             day: d.day,
-            from: d.startElo,
-            to: d.endElo,
+            from: Math.round(d.startRating),
+            to: Math.round(d.endRating),
           });
         } else if (fall === bestDailyFall) {
           dailyFallEntries.push({
             player: getRef(pid),
             day: d.day,
-            from: d.startElo,
-            to: d.endElo,
+            from: Math.round(d.startRating),
+            to: Math.round(d.endRating),
           });
         }
       }
@@ -435,11 +447,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const biggestDailyClimber =
     bestDailyClimb > 0
-      ? { entries: dailyClimbEntries, climb: bestDailyClimb }
+      ? { entries: dailyClimbEntries, climb: Math.round(bestDailyClimb) }
       : null;
   const biggestDailyFaller =
     bestDailyFall > 0
-      ? { entries: dailyFallEntries, fall: bestDailyFall }
+      ? { entries: dailyFallEntries, fall: Math.round(bestDailyFall) }
       : null;
 
   // Biggest rivalry and dominator
@@ -601,18 +613,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return { wins: e?.wins ?? 0, losses: e?.losses ?? 0 };
   };
 
-  // Net ELO `drainerId` has taken off `victimId` across their matchups.
-  const eloDrainedFrom = (drainerId: number, victimId: number): number => {
+  // Net rating `drainerId` has taken off `victimId` across their matchups.
+  const ratingDrainedFrom = (drainerId: number, victimId: number): number => {
     const data = playerH2H.get(victimId);
     if (!data) return 0;
     const net = data.matches
       .filter((m) => m.winnerId === drainerId || m.loserId === drainerId)
       .reduce(
         (sum, m) =>
-          sum + (m.winnerId === victimId ? m.winnerEloChange : m.loserEloChange),
+          sum + (m.winnerId === victimId ? m.winnerRatingChange : m.loserRatingChange),
         0,
       );
-    return Math.max(0, -net);
+    return Math.round(Math.max(0, -net));
   };
 
   // Wrap relationship stats with the players who chose each winner, enriched
@@ -659,7 +671,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 loser: getRef(m.loserId),
                 matchDate: m.createdAt.toISOString(),
               })),
-              eloGain: biggestUpsetGain,
+              winnerOdds: lowestUpsetOdds,
             }
           : null,
       mostUpsetsCaused: wrapCount(mostUpsets),
@@ -676,18 +688,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           : null,
     },
     players: {
-      peakElo:
-        peak && peak.score > 1000
+      peakRating:
+        peak && peak.score > 1500
           ? {
               players: peak.players,
-              elo: peak.score,
+              rating: Math.round(peak.score),
             }
           : null,
-      currentTopElo:
-        currentTop && currentTop.score > 1000
+      currentTopRating:
+        currentTop && currentTop.score > 1500
           ? {
               players: currentTop.players,
-              elo: currentTop.score,
+              rating: Math.round(currentTop.score),
             }
           : null,
       biggestClimber:
@@ -695,10 +707,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ? {
               entries: climber.players.map((pl) => ({
                 player: pl,
-                from: acc.get(pl.id)!.minElo,
-                to: acc.get(pl.id)!.currentElo,
+                from: Math.round(acc.get(pl.id)!.minRating),
+                to: Math.round(acc.get(pl.id)!.currentRating),
               })),
-              climb: climber.score,
+              climb: Math.round(climber.score),
             }
           : null,
       biggestFaller:
@@ -706,10 +718,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ? {
               entries: faller.players.map((pl) => ({
                 player: pl,
-                from: acc.get(pl.id)!.peakElo,
-                to: acc.get(pl.id)!.currentElo,
+                from: Math.round(acc.get(pl.id)!.peakRating),
+                to: Math.round(acc.get(pl.id)!.currentRating),
               })),
-              fall: faller.score,
+              fall: Math.round(faller.score),
             }
           : null,
       biggestDailyClimber,
@@ -735,14 +747,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         (d) => d.matches,
       ),
-      // Most ELO drained first.
+      // Most rating drained first.
       biggestVillain: wrapRelationship(
         biggestVillain,
         nemesisOf,
         (winnerId, subjectId) => ({
-          eloDrained: eloDrainedFrom(winnerId, subjectId),
+          ratingDrained: ratingDrainedFrom(winnerId, subjectId),
         }),
-        (d) => d.eloDrained,
+        (d) => d.ratingDrained,
       ),
       // Closest rivalry first (computeRival's tightness score: total - 3·gap).
       biggestOp: wrapRelationship(
@@ -752,11 +764,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         (d) => d.wins + d.losses - 3 * Math.abs(d.wins - d.losses),
       ),
     },
-    eloHistory: {
+    ratingHistory: {
       players: allPlayers.map((p) => ({
         id: p.id,
         name: p.name,
-        points: eloHistory.get(p.id) ?? [],
+        points: ratingHistory.get(p.id) ?? [],
       })),
     },
   };

@@ -151,13 +151,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Revert ELO
+    // Revert ratings from the pre-match snapshots (exact restore of rating,
+    // RD, volatility, and last-match time). Falls back to subtracting the
+    // rating change for legacy rows without snapshots.
     await Promise.all([
       db.update(players)
-        .set({ elo: winner.elo - latest.winnerEloChange })
+        .set(
+          latest.winnerRatingBefore != null
+            ? {
+                rating: latest.winnerRatingBefore,
+                rd: latest.winnerRdBefore!,
+                volatility: latest.winnerVolBefore!,
+                lastMatchAt: latest.winnerLastMatchBefore,
+              }
+            : { rating: winner.rating - latest.winnerRatingChange },
+        )
         .where(eq(players.id, winner.id)),
       db.update(players)
-        .set({ elo: loser.elo - latest.loserEloChange })
+        .set(
+          latest.loserRatingBefore != null
+            ? {
+                rating: latest.loserRatingBefore,
+                rd: latest.loserRdBefore!,
+                volatility: latest.loserVolBefore!,
+                lastMatchAt: latest.loserLastMatchBefore,
+              }
+            : { rating: loser.rating - latest.loserRatingChange },
+        )
         .where(eq(players.id, loser.id)),
     ]);
 

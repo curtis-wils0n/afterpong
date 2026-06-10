@@ -115,24 +115,24 @@ function NoData({ label, tooltip }: { label: string; tooltip?: string }) {
 }
 
 const TIPS = {
-  peakElo: 'Highest ELO anyone has ever reached',
-  currentTopElo: 'Highest ELO of any active player right now',
+  peakRating: 'Highest skill rating anyone has ever reached',
+  currentTopRating: 'Highest skill rating of any active player right now',
   biggestClimber:
-    'Largest gap between a player’s lowest ever ELO and their current ELO',
+    'Largest gap between a player’s lowest ever rating and their current rating',
   biggestFaller:
-    'Largest gap between a player’s peak ELO and their current ELO',
+    'Largest gap between a player’s peak rating and their current rating',
   biggestDailyClimber:
-    'Largest net ELO gained by any player on a single day',
+    'Largest net rating gained by any player on a single day',
   biggestDailyFaller:
-    'Largest net ELO lost by any player on a single day',
+    'Largest net rating lost by any player on a single day',
   currentWinStreak: 'Longest active streak of consecutive wins',
   longestWinStreak: 'Longest streak of consecutive wins ever recorded',
   currentLossStreak: 'Longest active streak of consecutive losses',
   longestLossStreak: 'Longest streak of consecutive losses ever recorded',
   biggestUpset:
-    'Single match where the winner gained the most ELO from one win',
+    'Single match where the winner had the lowest pre-match win probability',
   mostUpsetsCaused:
-    'Career count of wins where the player was the underdog (gained more than 20 ELO)',
+    'Career count of wins where the player was the underdog (under 37.5% to win going in)',
   highestWinRate:
     'Highest win percentage among players with at least 10 matches',
   mostSuccessfulClimbs:
@@ -147,7 +147,7 @@ const TIPS = {
   mostFriendly:
     'Player most often shown as the FRIEND badge on others’ profiles (most games together)',
   biggestVillain:
-    'Player most often shown as the NEMESIS badge on others’ profiles (drained the most ELO)',
+    'Player most often shown as the NEMESIS badge on others’ profiles (drained the most rating)',
   biggestOp:
     'Player most often shown as the RIVAL badge on others’ profiles (closest matchup)',
 };
@@ -305,10 +305,10 @@ function formatDayLabel(dayKey: string) {
   });
 }
 
-function EloHistoryChart({
+function RatingHistoryChart({
   players,
 }: {
-  players: StatsResponse['eloHistory']['players'];
+  players: StatsResponse['ratingHistory']['players'];
 }) {
   const [windowKey, setWindowKey] = useState<WindowKey>('all');
   const [hoveredId, setHoveredId] = useState<number | null>(null);
@@ -318,7 +318,7 @@ function EloHistoryChart({
   // (drop the synthetic createdAt point — it's not a game day). Days with
   // no games never enter the data, so the X axis collapses dead stretches.
   // For windowed views, also anchor each player at the window start with
-  // their pre-window ELO so lines span the full timeframe instead of
+  // their pre-window rating so lines span the full timeframe instead of
   // starting at the first in-window match.
   const series = useMemo(() => {
     const opt = WINDOW_OPTIONS.find((o) => o.key === windowKey)!;
@@ -327,27 +327,27 @@ function EloHistoryChart({
       opt.days != null ? now - opt.days * 24 * 60 * 60 * 1000 : null;
 
     return players.map((p) => {
-      // p.points[0] is the synthetic { createdAt, 1000 } from the API.
+      // p.points[0] is the synthetic { createdAt, 1500 } from the API.
       const matchPts = p.points.slice(1);
-      const byDay = new Map<string, { day: string; t: number; elo: number }>();
-      let preWindowElo: number | null = null;
+      const byDay = new Map<string, { day: string; t: number; rating: number }>();
+      let preWindowRating: number | null = null;
       for (const pt of matchPts) {
         const t = new Date(pt.t).getTime();
         if (windowStart != null && t < windowStart) {
-          preWindowElo = pt.elo;
+          preWindowRating = pt.rating;
           continue;
         }
         const day = localDayKey(t);
         const prev = byDay.get(day);
-        if (!prev || prev.t <= t) byDay.set(day, { day, t, elo: pt.elo });
+        if (!prev || prev.t <= t) byDay.set(day, { day, t, rating: pt.rating });
       }
-      if (windowStart != null && preWindowElo != null) {
+      if (windowStart != null && preWindowRating != null) {
         const anchorDay = localDayKey(windowStart);
         if (!byDay.has(anchorDay)) {
           byDay.set(anchorDay, {
             day: anchorDay,
             t: windowStart,
-            elo: preWindowElo,
+            rating: preWindowRating,
           });
         }
       }
@@ -379,7 +379,7 @@ function EloHistoryChart({
       const row: Record<string, number | string | null> = { idx, day };
       visibleSeries.forEach((s, i) => {
         while (cursors[i] < s.data.length && s.data[cursors[i]].day <= day) {
-          last[i] = s.data[cursors[i]].elo;
+          last[i] = s.data[cursors[i]].rating;
           cursors[i]++;
         }
         row[`p${s.id}`] = last[i];
@@ -389,10 +389,10 @@ function EloHistoryChart({
   }, [visibleSeries, dayKeys]);
 
   const yDomain = useMemo(() => {
-    const elos: number[] = [];
-    for (const s of visibleSeries) for (const pt of s.data) elos.push(pt.elo);
-    if (elos.length === 0) return [980, 1020] as [number, number];
-    return [Math.min(...elos) - 20, Math.max(...elos) + 20] as [number, number];
+    const ratingVals: number[] = [];
+    for (const s of visibleSeries) for (const pt of s.data) ratingVals.push(pt.rating);
+    if (ratingVals.length === 0) return [1480, 1520] as [number, number];
+    return [Math.min(...ratingVals) - 20, Math.max(...ratingVals) + 20] as [number, number];
   }, [visibleSeries]);
 
   // Colors are stable per legend slot regardless of which lines are hidden.
@@ -415,7 +415,7 @@ function EloHistoryChart({
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-6 h-[520px] flex flex-col">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm text-slate-400">ELO over time</h3>
+        <h3 className="text-sm text-slate-400">Rating over time</h3>
         <div className="flex gap-1">
           {WINDOW_OPTIONS.map((opt) => (
             <button
@@ -600,21 +600,21 @@ export default function Stats() {
     <div>
       <h1 className="text-2xl font-bold mb-6">Stats</h1>
 
-      <EloHistoryChart players={stats.eloHistory.players} />
+      <RatingHistoryChart players={stats.ratingHistory.players} />
 
       {/* Players */}
       <h2 className="text-lg font-semibold mb-3">Players</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        {stats.players.peakElo ? (
+        {stats.players.peakRating ? (
           <StatCard
-            label="All-Time Peak ELO"
-            value={String(stats.players.peakElo.elo)}
-            tooltip={TIPS.peakElo}
+            label="All-Time Peak Rating"
+            value={String(stats.players.peakRating.rating)}
+            tooltip={TIPS.peakRating}
           >
-            <PlayerLinks players={stats.players.peakElo.players} />
+            <PlayerLinks players={stats.players.peakRating.players} />
           </StatCard>
         ) : (
-          <NoData label="All-Time Peak ELO" tooltip={TIPS.peakElo} />
+          <NoData label="All-Time Peak Rating" tooltip={TIPS.peakRating} />
         )}
 
         {stats.players.biggestClimber ? (
@@ -659,16 +659,16 @@ export default function Stats() {
           <NoData label="Biggest Fall" tooltip={TIPS.biggestFaller} />
         )}
 
-        {stats.players.currentTopElo ? (
+        {stats.players.currentTopRating ? (
           <StatCard
-            label="Current Top ELO"
-            value={String(stats.players.currentTopElo.elo)}
-            tooltip={TIPS.currentTopElo}
+            label="Current Top Rating"
+            value={String(stats.players.currentTopRating.rating)}
+            tooltip={TIPS.currentTopRating}
           >
-            <PlayerLinks players={stats.players.currentTopElo.players} />
+            <PlayerLinks players={stats.players.currentTopRating.players} />
           </StatCard>
         ) : (
-          <NoData label="Current Top ELO" tooltip={TIPS.currentTopElo} />
+          <NoData label="Current Top Rating" tooltip={TIPS.currentTopRating} />
         )}
 
         {stats.players.biggestDailyClimber ? (
@@ -798,7 +798,7 @@ export default function Stats() {
         {stats.matches.biggestUpset ? (
           <StatCard
             label="Biggest Upset"
-            value={`+${stats.matches.biggestUpset.eloGain}`}
+            value={`${Math.round(stats.matches.biggestUpset.winnerOdds * 100)}% odds`}
             valueClass="text-yellow-400"
             tooltip={TIPS.biggestUpset}
           >
@@ -1011,9 +1011,9 @@ export default function Stats() {
                       tooltip={(s) => (
                         <>
                           <span className="font-mono tabular-nums text-red-400">
-                            -{s.eloDrained}
+                            -{s.ratingDrained}
                           </span>{' '}
-                          ELO
+                          rating
                         </>
                       )}
                     />

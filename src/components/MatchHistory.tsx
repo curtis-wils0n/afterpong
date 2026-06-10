@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { isUpset } from '../../lib/elo';
+import { isUpset } from '../../lib/glicko';
 import type { Match, Player } from '../types';
 
 const PAGE_SIZE = 25;
@@ -58,7 +58,7 @@ export default function MatchHistory() {
   }, [filter1, filter2]);
 
   const handleUndo = async () => {
-    if (!confirm('Undo the most recent match? This will revert ELO and ladder changes.')) return;
+    if (!confirm('Undo the most recent match? This will revert rating and ladder changes.')) return;
     setUndoing(true);
     try {
       await api.matches.deleteLast();
@@ -195,10 +195,10 @@ export default function MatchHistory() {
                       </span>
                     )}
                     <span className="text-emerald-400 tabular-nums">
-                      +{match.winnerEloChange}
+                      +{Math.round(match.winnerRatingChange)}
                     </span>
                     <span className="text-red-400 tabular-nums">
-                      {match.loserEloChange}
+                      {Math.round(match.loserRatingChange)}
                     </span>
                     {isAdmin && (
                       <span className="text-slate-500 text-xs w-28 text-right">

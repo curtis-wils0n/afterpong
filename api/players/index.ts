@@ -11,9 +11,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
     const sort = req.query.sort;
     const includeStats = req.query.include === 'stats';
+    // Default sort is the conservative rating (rating − 2×RD) — the same
+    // number the leaderboard displays.
     const orderBy = sort === 'rank'
       ? asc(players.challengeRank)
-      : desc(players.elo);
+      : desc(sql`${players.rating} - 2 * ${players.rd}`);
     const allPlayers = await db.select().from(players).orderBy(orderBy);
 
     if (!includeStats) {

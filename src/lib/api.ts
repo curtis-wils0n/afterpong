@@ -37,7 +37,7 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   players: {
-    list: (sort?: 'elo' | 'rank', includeStats?: boolean) => {
+    list: (sort?: 'rating' | 'rank', includeStats?: boolean) => {
       const params = new URLSearchParams();
       if (sort) params.set('sort', sort);
       if (includeStats) params.set('include', 'stats');

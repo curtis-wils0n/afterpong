@@ -42,7 +42,7 @@ export default function TournamentDetail() {
     if (!tournament) return;
     if (
       !confirm(
-        `Cancel and delete tournament "${tournament.name}"? Played matches will be kept (ELO stays applied) but the bracket will be removed.`,
+        `Cancel and delete tournament "${tournament.name}"? Played matches will be kept (rating changes stay applied) but the bracket will be removed.`,
       )
     )
       return;
