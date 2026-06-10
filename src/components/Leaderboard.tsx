@@ -6,6 +6,10 @@ import type { Player } from '../types';
 import LogMatchModal from './LogMatchModal';
 
 const displayRating = (p: Player) => Math.round(conservativeRating(p));
+// Shown uncertainty is 2×RD, derived so the arithmetic is exact on screen:
+// leaderboard score = skill − ±.
+const displaySkill = (p: Player) => Math.round(p.rating);
+const displayUncertainty = (p: Player) => displaySkill(p) - displayRating(p);
 
 export default function Leaderboard() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -145,7 +149,7 @@ export default function Leaderboard() {
                   {displayRating(player)}
                 </span>
                 <span className="block text-[10px] font-mono text-slate-500 tabular-nums leading-tight">
-                  {Math.round(player.rating)} ±{Math.round(player.rd)}
+                  {displaySkill(player)} ±{displayUncertainty(player)}
                 </span>
               </span>
             </Link>

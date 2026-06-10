@@ -109,8 +109,8 @@ export default function Docs() {
             <li>
               <strong>Add yourself</strong> on the Leaderboard page if you're
               new. A fresh player starts at a skill rating of <Mono>1500</Mono>{' '}
-              with maximum uncertainty (<Mono>±350</Mono>), so their leaderboard
-              score starts near the bottom and climbs quickly as they play. New
+              with maximum uncertainty (<Mono>±700</Mono>, so a leaderboard
+              score of <Mono>800</Mono>) and climbs quickly as they play. New
               players also get appended to the bottom of the challenge ladder.
             </li>
             <li>
@@ -189,14 +189,17 @@ export default function Docs() {
             <strong>conservative rating</strong>:
           </p>
           <pre className="bg-slate-900 border border-slate-700 rounded p-3 text-xs overflow-x-auto mt-2">
-{`leaderboard score = skill rating − 2 × RD`}
+{`leaderboard score = skill rating − uncertainty   (uncertainty = 2 × RD)`}
           </pre>
           <p className="mt-2">
-            Read it as "we're confident you're at least this good." A brand-new
-            player at 1500 ±350 scores 800 and starts near the bottom — winning
-            doesn't just raise their rating, it shrinks their RD, so the score
-            climbs fast over the first ~10 games. No more squatting mid-table
-            on one lucky win.
+            The small <Mono>±</Mono> next to a player's skill rating is that
+            uncertainty, so the subtraction is visible on the leaderboard:{' '}
+            <Mono>1983 ±200</Mono> scores <Mono>1783</Mono>. Read it as "we're
+            confident you're at least this good." A brand-new player at{' '}
+            <Mono>1500 ±700</Mono> scores 800 and starts near the bottom —
+            winning doesn't just raise their rating, it shrinks their
+            uncertainty, so the score climbs fast over the first ~10 games. No
+            more squatting mid-table on one lucky win.
           </p>
           <ul className="list-disc pl-5 space-y-1 mt-2">
             <li>
@@ -479,12 +482,13 @@ export default function Docs() {
               every match.
             </Term>
             <Term word="RD (rating deviation)">
-              How uncertain the skill rating is. Starts at 350, shrinks with
-              games played, grows with idle time.
+              How uncertain the skill rating is. Shrinks with games played,
+              grows with idle time. Shown on the leaderboard doubled, as the{' '}
+              <Mono>±</Mono> uncertainty.
             </Term>
             <Term word="Conservative rating">
-              Skill rating − 2×RD. The number the leaderboard ranks and
-              displays — "at least this good."
+              Skill rating − the shown ± uncertainty (2×RD). The number the
+              leaderboard ranks and displays — "at least this good."
             </Term>
             <Term word="Volatility">
               How erratic a player's results have been. Higher volatility lets

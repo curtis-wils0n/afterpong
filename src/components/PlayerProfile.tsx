@@ -156,7 +156,8 @@ export default function PlayerProfile() {
               )}
             </div>
             <span className="text-xs font-mono text-slate-500 tabular-nums">
-              skill {Math.round(player.rating)} ±{Math.round(player.rd)}
+              skill {Math.round(player.rating)} ±
+              {Math.round(player.rating) - Math.round(conservativeRating(player))}
             </span>
           </div>
         </div>
