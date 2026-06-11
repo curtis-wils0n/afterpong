@@ -9,6 +9,14 @@ import LogMatchModal from './LogMatchModal';
 
 const PAGE_SIZE = 25;
 
+// Blend the odds chip from slate-500 (routine result, >=50%) toward the
+// upset yellow-400 as the winner's odds drop (fully yellow at <=10%).
+function oddsColor(odds: number): string {
+  const t = Math.min(1, Math.max(0, (0.5 - odds) / 0.4));
+  const mix = (a: number, b: number) => Math.round(a + (b - a) * t);
+  return `rgb(${mix(100, 250)}, ${mix(116, 204)}, ${mix(139, 21)})`;
+}
+
 export default function MatchHistory() {
   const { isAdmin } = useAuth();
   const [matches, setMatches] = useState<Match[]>([]);
@@ -216,7 +224,8 @@ export default function MatchHistory() {
                       const odds = preMatchWinnerOdds(match);
                       return odds != null ? (
                         <span
-                          className="text-slate-500 text-xs tabular-nums"
+                          className="text-xs tabular-nums"
+                          style={{ color: oddsColor(odds) }}
                           title="Winner's pre-match win odds"
                         >
                           {Math.round(odds * 100)}%
