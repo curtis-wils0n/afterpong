@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { conservativeRating } from '../../lib/glicko';
 import type { Player } from '../types';
@@ -12,9 +12,11 @@ const displaySkill = (p: Player) => Math.round(p.rating);
 const displayUncertainty = (p: Player) => displaySkill(p) - displayRating(p);
 
 export default function Leaderboard() {
+  // ?log=1 (the PWA "Log a match" shortcut) opens the modal immediately.
+  const [searchParams, setSearchParams] = useSearchParams();
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showLogMatch, setShowLogMatch] = useState(false);
+  const [showLogMatch, setShowLogMatch] = useState(searchParams.get('log') === '1');
   const [newPlayerName, setNewPlayerName] = useState('');
   const [adding, setAdding] = useState(false);
 
@@ -160,9 +162,13 @@ export default function Leaderboard() {
       {showLogMatch && (
         <LogMatchModal
           players={players}
-          onClose={() => setShowLogMatch(false)}
+          onClose={() => {
+            setShowLogMatch(false);
+            if (searchParams.has('log')) setSearchParams({}, { replace: true });
+          }}
           onLogged={() => {
             setShowLogMatch(false);
+            if (searchParams.has('log')) setSearchParams({}, { replace: true });
             fetchPlayers();
           }}
         />

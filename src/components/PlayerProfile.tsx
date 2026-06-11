@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
+import { ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, Tooltip } from 'recharts';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { isUpset, expectedScore, conservativeRating } from '../../lib/glicko';
@@ -85,26 +85,54 @@ export default function PlayerProfile() {
       startRating -= change;
     }
 
-    const points: { label: string; rating: number; opponent: string; date: string }[] = [
-      { label: 'Start', rating: Math.round(startRating), opponent: '', date: '' },
+    // The player's RD before a given match is stored on the match row; the RD
+    // *after* match i is approximated by match i+1's before-value, with the
+    // current RD closing out the series.
+    const rdBeforeOf = (m: (typeof chronological)[number]) =>
+      m.winnerId === player.id ? m.winnerRdBefore : m.loserRdBefore;
+    const startRd = chronological.length > 0 ? rdBeforeOf(chronological[0]) : null;
+
+    const points: {
+      label: string;
+      rating: number;
+      band: [number, number] | null;
+      opponent: string;
+      date: string;
+    }[] = [
+      {
+        label: 'Start',
+        rating: Math.round(startRating),
+        band:
+          startRd != null
+            ? [Math.round(startRating - 2 * startRd), Math.round(startRating + 2 * startRd)]
+            : null,
+        opponent: '',
+        date: '',
+      },
     ];
 
     let currentRating = startRating;
-    for (const m of chronological) {
+    chronological.forEach((m, i) => {
       const won = m.winnerId === player.id;
       const change = won ? m.winnerRatingChange : m.loserRatingChange;
       currentRating += change;
+      const next = chronological[i + 1];
+      const rdAfter = next != null ? rdBeforeOf(next) : player.rd;
       const opponentId = won ? m.loserId : m.winnerId;
       points.push({
         label: `#${points.length}`,
         rating: Math.round(currentRating),
+        band:
+          rdAfter != null
+            ? [Math.round(currentRating - 2 * rdAfter), Math.round(currentRating + 2 * rdAfter)]
+            : null,
         opponent: opponentMap.get(opponentId) || `Player #${opponentId}`,
         date: new Date(m.createdAt).toLocaleDateString('en-US', {
           month: 'short',
           day: 'numeric',
         }),
       });
-    }
+    });
 
     return points;
   })();
@@ -228,7 +256,7 @@ export default function PlayerProfile() {
         <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-6">
           <h3 className="text-sm text-slate-400 mb-3">Rating History</h3>
           <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={ratingHistory}>
+            <ComposedChart data={ratingHistory}>
               <XAxis dataKey="label" hide />
               <YAxis
                 domain={['dataMin - 20', 'dataMax + 20']}
@@ -252,6 +280,15 @@ export default function PlayerProfile() {
                   return `vs ${data.opponent} · ${data.date}`;
                 }}
               />
+              <Area
+                type="monotone"
+                dataKey="band"
+                stroke="none"
+                fill="#10b981"
+                fillOpacity={0.08}
+                activeDot={false}
+                tooltipType="none"
+              />
               <Line
                 type="monotone"
                 dataKey="rating"
@@ -260,7 +297,7 @@ export default function PlayerProfile() {
                 dot={false}
                 activeDot={{ r: 4, fill: '#10b981' }}
               />
-            </LineChart>
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       )}

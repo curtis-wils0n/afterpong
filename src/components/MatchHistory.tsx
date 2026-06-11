@@ -58,6 +58,27 @@ export default function MatchHistory() {
     setPage(0);
   }, [filter1, filter2]);
 
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const handleDelete = async (match: Match) => {
+    if (
+      !confirm(
+        `Delete ${match.winner?.name ?? 'winner'} def. ${match.loser?.name ?? 'loser'}? ` +
+          'All ratings will be recomputed from the remaining history. Ladder positions are not changed.',
+      )
+    )
+      return;
+    setDeletingId(match.id);
+    try {
+      await api.matches.delete(match.id);
+      fetchMatches();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete match');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const handleUndo = async () => {
     if (!confirm('Undo the most recent match? This will revert rating and ladder changes.')) return;
     setUndoing(true);
@@ -149,7 +170,7 @@ export default function MatchHistory() {
         <div className="space-y-2">
           {matches.map((match, index) => (
             <div key={match.id} className="flex items-center gap-2">
-              <div className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3">
+              <div className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 group">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <Link
@@ -205,6 +226,16 @@ export default function MatchHistory() {
                       <span className="text-slate-500 text-xs w-28 text-right">
                         {formatDate(match.createdAt)}
                       </span>
+                    )}
+                    {isAdmin && match.tournamentMatchId == null && (
+                      <button
+                        onClick={() => handleDelete(match)}
+                        disabled={deletingId === match.id}
+                        title="Delete match and recompute ratings"
+                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-slate-600 hover:text-red-400 text-sm w-4 disabled:opacity-50"
+                      >
+                        {deletingId === match.id ? '\u2026' : '\u00d7'}
+                      </button>
                     )}
                   </div>
                 </div>

@@ -82,6 +82,8 @@ export const api = {
       }),
     deleteLast: () =>
       fetchJSON<Match>('/matches', { method: 'DELETE' }),
+    delete: (id: number) =>
+      fetchJSON<{ ok: true }>(`/matches/${id}`, { method: 'DELETE' }),
   },
   stats: {
     get: () => fetchJSON<StatsResponse>('/stats'),
