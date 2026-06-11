@@ -28,11 +28,20 @@ export default function LogMatchModal({
   const [player2Id, setPlayer2Id] = useState<number | ''>(
     preselectedPlayers?.targetId ?? '',
   );
-  const [gameScores, setGameScores] = useState([
-    { player1Score: '', player2Score: '' },
-  ]);
+  type GameRow = {
+    player1Score: string;
+    player2Score: string;
+    // Scoreless mode: which player won this game (no points recorded).
+    scorelessWinner: 1 | 2 | null;
+  };
+  const emptyRow = (): GameRow => ({
+    player1Score: '',
+    player2Score: '',
+    scorelessWinner: null,
+  });
+  const [gameScores, setGameScores] = useState<GameRow[]>([emptyRow()]);
   // When off, games are logged without point scores: each game just records
-  // who won it (stored as a 1-0 placeholder, the league's convention).
+  // who won it.
   const [trackPoints, setTrackPoints] = useState(true);
   const isTournament = tournamentMatchId != null;
   // Tournament matches are never challenge matches.
@@ -87,14 +96,20 @@ export default function LogMatchModal({
   const player2 = players.find((p) => p.id === player2Id);
 
   // Count games won by each player
-  const filledGames = gameScores.filter(
-    (g) => g.player1Score !== '' && g.player2Score !== '',
+  const filledGames = gameScores.filter((g) =>
+    trackPoints
+      ? g.player1Score !== '' && g.player2Score !== ''
+      : g.scorelessWinner != null,
   );
-  const p1Wins = filledGames.filter(
-    (g) => Number(g.player1Score) > Number(g.player2Score),
+  const p1Wins = filledGames.filter((g) =>
+    trackPoints
+      ? Number(g.player1Score) > Number(g.player2Score)
+      : g.scorelessWinner === 1,
   ).length;
-  const p2Wins = filledGames.filter(
-    (g) => Number(g.player2Score) > Number(g.player1Score),
+  const p2Wins = filledGames.filter((g) =>
+    trackPoints
+      ? Number(g.player2Score) > Number(g.player1Score)
+      : g.scorelessWinner === 2,
   ).length;
 
   const winnerId = p1Wins > p2Wins ? player1Id : p2Wins > p1Wins ? player2Id : null;
@@ -109,7 +124,7 @@ export default function LogMatchModal({
     !submitting;
 
   const addGame = () => {
-    setGameScores([...gameScores, { player1Score: '', player2Score: '' }]);
+    setGameScores([...gameScores, emptyRow()]);
   };
 
   const removeGame = (index: number) => {
@@ -126,37 +141,31 @@ export default function LogMatchModal({
     setGameScores(updated);
   };
 
-  // Scoreless mode: clicking a player marks them as that game's winner
-  // (1-0 placeholder); clicking the current winner again clears the game.
+  // Scoreless mode: clicking a player marks them as that game's winner;
+  // clicking the current winner again clears the game.
   const setGameWinner = (index: number, who: 1 | 2) => {
     const updated = [...gameScores];
-    const current = updated[index];
-    const alreadyWinner =
-      who === 1
-        ? current.player1Score === '1' && current.player2Score === '0'
-        : current.player2Score === '1' && current.player1Score === '0';
-    updated[index] = alreadyWinner
-      ? { player1Score: '', player2Score: '' }
-      : who === 1
-        ? { player1Score: '1', player2Score: '0' }
-        : { player1Score: '0', player2Score: '1' };
+    updated[index] = {
+      ...updated[index],
+      scorelessWinner: updated[index].scorelessWinner === who ? null : who,
+    };
     setGameScores(updated);
   };
 
   const toggleTrackPoints = () => {
     if (trackPoints) {
-      // Collapse any entered point scores to 1-0 placeholders by game winner.
+      // Carry entered point scores over as game-winner picks.
       setGameScores((prev) =>
         prev.map((g) => {
           if (g.player1Score === '' || g.player2Score === '') {
-            return { player1Score: '', player2Score: '' };
+            return { ...g, scorelessWinner: null };
           }
           const p1 = Number(g.player1Score);
           const p2 = Number(g.player2Score);
-          if (p1 === p2) return { player1Score: '', player2Score: '' };
-          return p1 > p2
-            ? { player1Score: '1', player2Score: '0' }
-            : { player1Score: '0', player2Score: '1' };
+          return {
+            ...g,
+            scorelessWinner: p1 > p2 ? 1 : p2 > p1 ? 2 : null,
+          };
         }),
       );
     }
@@ -170,8 +179,17 @@ export default function LogMatchModal({
     setSubmitting(true);
     setError('');
     try {
-      // Map game scores from player1/player2 to winner/loser perspective
+      // Map games from player1/player2 to winner/loser perspective. Scoreless
+      // games carry no points — just who won each game.
       const games = filledGames.map((g) => {
+        if (!trackPoints) {
+          const gameWinner = g.scorelessWinner === 1 ? player1Id : player2Id;
+          return {
+            winnerScore: null,
+            loserScore: null,
+            wonByMatchWinner: gameWinner === winnerId,
+          };
+        }
         const p1 = Number(g.player1Score);
         const p2 = Number(g.player2Score);
         if (winnerId === player1Id) {
@@ -345,8 +363,12 @@ export default function LogMatchModal({
                   const p2 = Number(game.player2Score);
                   const gameComplete =
                     game.player1Score !== '' && game.player2Score !== '';
-                  const p1Won = gameComplete && p1 > p2;
-                  const p2Won = gameComplete && p2 > p1;
+                  const p1Won = trackPoints
+                    ? gameComplete && p1 > p2
+                    : game.scorelessWinner === 1;
+                  const p2Won = trackPoints
+                    ? gameComplete && p2 > p1
+                    : game.scorelessWinner === 2;
 
                   if (!trackPoints) {
                     return (

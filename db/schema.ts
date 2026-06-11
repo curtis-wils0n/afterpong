@@ -1,4 +1,5 @@
 import { pgTable, serial, varchar, integer, doublePrecision, timestamp, boolean, jsonb, pgEnum } from 'drizzle-orm/pg-core';
+import type { GameScore } from '../lib/games.js';
 
 export const players = pgTable('players', {
   id: serial('id').primaryKey(),
@@ -31,7 +32,7 @@ export const matches = pgTable('matches', {
   loserVolBefore: doublePrecision('loser_vol_before'),
   loserLastMatchBefore: timestamp('loser_last_match_before'),
   isChallenge: boolean('is_challenge').notNull().default(false),
-  games: jsonb('games').$type<{ winnerScore: number; loserScore: number }[]>(),
+  games: jsonb('games').$type<GameScore[]>(),
   winnerRankBefore: integer('winner_rank_before'),
   loserRankBefore: integer('loser_rank_before'),
   tournamentMatchId: integer('tournament_match_id'),

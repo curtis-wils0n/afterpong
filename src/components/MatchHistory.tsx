@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { isUpset } from '../../lib/glicko';
-import { hasPointScores } from '../lib/games';
+import { hasPointScores } from '../../lib/games';
 import type { Match, Player } from '../types';
 
 const PAGE_SIZE = 25;
@@ -170,7 +170,7 @@ export default function MatchHistory() {
                         {match.winnerScore}-{match.loserScore}
                         {' '}
                         <span className="text-slate-500">
-                          ({match.games.map(g => `${g.winnerScore}-${g.loserScore}`).join(', ')})
+                          ({match.games.map(g => g.winnerScore != null ? `${g.winnerScore}-${g.loserScore}` : '\u2013').join(', ')})
                         </span>
                       </span>
                     ) : match.winnerScore != null && match.loserScore != null ? (

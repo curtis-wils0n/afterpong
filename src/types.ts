@@ -15,8 +15,10 @@ export interface Player {
 }
 
 export interface GameScore {
-  winnerScore: number;
-  loserScore: number;
+  winnerScore: number | null;
+  loserScore: number | null;
+  // Only meaningful for scoreless games (both scores null).
+  wonByMatchWinner?: boolean;
 }
 
 export interface Match {

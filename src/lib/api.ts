@@ -1,4 +1,5 @@
 import type {
+  GameScore,
   Player,
   Match,
   MatchListResponse,
@@ -73,7 +74,7 @@ export const api = {
       winnerScore?: number;
       loserScore?: number;
       isChallenge?: boolean;
-      games?: { winnerScore: number; loserScore: number }[];
+      games?: GameScore[];
     }) =>
       fetchJSON<Match>('/matches', {
         method: 'POST',
@@ -108,7 +109,7 @@ export const api = {
         winnerScore?: number;
         loserScore?: number;
         isChallenge?: boolean;
-        games?: { winnerScore: number; loserScore: number }[];
+        games?: GameScore[];
       },
     ) =>
       fetchJSON<Match>(

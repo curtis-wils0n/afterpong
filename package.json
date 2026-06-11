@@ -11,6 +11,7 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:backfill-glicko": "npx tsx --env-file=.env db/backfill-glicko.ts",
+    "db:normalize-scoreless": "npx tsx --env-file=.env db/normalize-scoreless-games.ts",
     "db:studio": "drizzle-kit studio",
     "db:reset": "npx neonctl@latest branches reset local-dev --project-id rough-credit-01845192 --parent"
   },

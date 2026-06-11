@@ -4,7 +4,7 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'rec
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { isUpset, expectedScore, conservativeRating } from '../../lib/glicko';
-import { hasPointScores } from '../lib/games';
+import { hasPointScores } from '../../lib/games';
 import {
   computeNemesis,
   computeRival,
@@ -483,7 +483,7 @@ export default function PlayerProfile() {
                                       : `${match.loserScore}-${match.winnerScore}`}
                                     {' '}
                                     ({match.games.map(g =>
-                                      won ? `${g.winnerScore}-${g.loserScore}` : `${g.loserScore}-${g.winnerScore}`
+                                      g.winnerScore == null ? '\u2013' : won ? `${g.winnerScore}-${g.loserScore}` : `${g.loserScore}-${g.winnerScore}`
                                     ).join(', ')})
                                   </span>
                                 ) : match.winnerScore != null &&
@@ -576,7 +576,7 @@ export default function PlayerProfile() {
                             : `${match.loserScore}-${match.winnerScore}`}
                           {' '}
                           ({match.games.map(g =>
-                            won ? `${g.winnerScore}-${g.loserScore}` : `${g.loserScore}-${g.winnerScore}`
+                            g.winnerScore == null ? '\u2013' : won ? `${g.winnerScore}-${g.loserScore}` : `${g.loserScore}-${g.winnerScore}`
                           ).join(', ')})
                         </span>
                       ) : match.winnerScore != null &&

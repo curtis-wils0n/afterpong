@@ -3,6 +3,7 @@ import { db } from '../../db/index.js';
 import { players, matches } from '../../db/schema.js';
 import { asc } from 'drizzle-orm';
 import { isUpset, expectedScore, PROVISIONAL_RD_CUTOFF } from '../../lib/glicko.js';
+import { gameWonByMatchWinner } from '../../lib/games.js';
 import {
   computeNemesis,
   computeRival,
@@ -335,9 +336,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Clutch stats from per-game scores.
     if (Array.isArray(m.games) && m.games.length > 0) {
-      const wonByWinner = m.games.filter(
-        (g) => g.winnerScore > g.loserScore,
-      ).length;
+      const wonByWinner = m.games.filter(gameWonByMatchWinner).length;
       const wonByLoser = m.games.length - wonByWinner;
       // Decider: a 3+ game series settled by a single game (2-1, 3-2, ...).
       if (m.games.length >= 3 && wonByWinner - wonByLoser === 1) {
@@ -345,16 +344,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         loser.clutchLosses += 1;
       }
       // Comeback: dropped the first game, won the series.
-      if (m.games.length >= 2 && m.games[0].winnerScore < m.games[0].loserScore) {
+      if (m.games.length >= 2 && !gameWonByMatchWinner(m.games[0])) {
         winner.comebacks += 1;
       }
-      // A bagel needs a real shutout score (11-0 or better). 1-0 entries are
-      // placeholders for games logged without point tracking.
+      // A bagel needs a real shutout score (11-0 or better). Scoreless games
+      // (and legacy 1-0 placeholders) don't count.
       for (const g of m.games) {
-        if (g.winnerScore >= 11 && g.loserScore === 0) {
-          winner.bagels += 1;
-        } else if (g.loserScore >= 11 && g.winnerScore === 0) {
-          loser.bagels += 1;
+        if (g.winnerScore != null && g.loserScore != null) {
+          if (g.winnerScore >= 11 && g.loserScore === 0) {
+            winner.bagels += 1;
+          } else if (g.loserScore >= 11 && g.winnerScore === 0) {
+            loser.bagels += 1;
+          }
         }
       }
     }

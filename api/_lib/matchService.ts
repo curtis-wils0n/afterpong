@@ -2,6 +2,7 @@ import { eq, and, gt, lt } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { players, matches } from '../../db/schema.js';
 import { inflateRd, rateMatch, daysBetween } from '../../lib/glicko.js';
+import { gameWonByMatchWinner, isScoredGame, type GameScore } from '../../lib/games.js';
 
 export interface CreateMatchInput {
   winnerId: number;
@@ -9,7 +10,7 @@ export interface CreateMatchInput {
   winnerScore?: number | null;
   loserScore?: number | null;
   isChallenge?: boolean;
-  games?: { winnerScore: number; loserScore: number }[] | null;
+  games?: GameScore[] | null;
   tournamentMatchId?: number | null;
 }
 
@@ -97,24 +98,24 @@ export async function createMatch(
     }
   }
 
-  // Validate games array if provided
-  let validatedGames: { winnerScore: number; loserScore: number }[] | null = null;
+  // Validate games array if provided. Each game is either scored (both
+  // point values present) or scoreless (both null + who won the game).
+  let validatedGames: GameScore[] | null = null;
   let seriesWinnerScore: number | null = winnerScore ?? null;
   let seriesLoserScore: number | null = loserScore ?? null;
 
   if (Array.isArray(games) && games.length > 0) {
     for (const g of games) {
-      if (
-        typeof g.winnerScore !== 'number' ||
-        typeof g.loserScore !== 'number' ||
-        g.winnerScore < 0 ||
-        g.loserScore < 0
-      ) {
+      const scoreless =
+        g.winnerScore == null &&
+        g.loserScore == null &&
+        typeof g.wonByMatchWinner === 'boolean';
+      if (scoreless) continue;
+      if (!isScoredGame(g) || g.winnerScore < 0 || g.loserScore < 0) {
         return { ok: false, status: 400, error: 'Invalid game scores' };
       }
     }
-    const gamesWonByWinner = games.filter((g) => g.winnerScore > g.loserScore)
-      .length;
+    const gamesWonByWinner = games.filter(gameWonByMatchWinner).length;
     const gamesWonByLoser = games.length - gamesWonByWinner;
     if (gamesWonByWinner <= gamesWonByLoser) {
       return { ok: false, status: 400, error: 'Winner must have won more games' };
