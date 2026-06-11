@@ -142,25 +142,36 @@ export const PROVISIONAL_RD_CUTOFF = 150;
 // this. 0.375 matches the spirit of the old ELO rule (gain > 20 with K=32).
 export const UPSET_PROBABILITY = 0.375;
 
-export function isUpset(match: {
+// Winner's pre-match win probability from the stored snapshots, or null for
+// rows without them.
+export function preMatchWinnerOdds(match: {
   winnerRatingBefore: number | null;
   winnerRdBefore: number | null;
   loserRatingBefore: number | null;
   loserRdBefore: number | null;
-}): boolean {
+}): number | null {
   if (
     match.winnerRatingBefore == null ||
     match.winnerRdBefore == null ||
     match.loserRatingBefore == null ||
     match.loserRdBefore == null
   ) {
-    return false;
+    return null;
   }
-  const winProb = expectedScore(
+  return expectedScore(
     { rating: match.winnerRatingBefore, rd: match.winnerRdBefore },
     { rating: match.loserRatingBefore, rd: match.loserRdBefore },
   );
-  return winProb < UPSET_PROBABILITY;
+}
+
+export function isUpset(match: {
+  winnerRatingBefore: number | null;
+  winnerRdBefore: number | null;
+  loserRatingBefore: number | null;
+  loserRdBefore: number | null;
+}): boolean {
+  const winProb = preMatchWinnerOdds(match);
+  return winProb != null && winProb < UPSET_PROBABILITY;
 }
 
 export function daysBetween(from: Date | null, to: Date): number {

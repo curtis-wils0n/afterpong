@@ -2,12 +2,20 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { isUpset } from '../../lib/glicko';
+import { isUpset, preMatchWinnerOdds } from '../../lib/glicko';
 import { hasPointScores } from '../../lib/games';
 import type { Match, Player } from '../types';
 import LogMatchModal from './LogMatchModal';
 
 const PAGE_SIZE = 25;
+
+// Blend the odds chip from slate-500 (routine result, >=50%) toward the
+// upset yellow-400 as the winner's odds drop (fully yellow at <=10%).
+function oddsColor(odds: number): string {
+  const t = Math.min(1, Math.max(0, (0.5 - odds) / 0.4));
+  const mix = (a: number, b: number) => Math.round(a + (b - a) * t);
+  return `rgb(${mix(100, 250)}, ${mix(116, 204)}, ${mix(139, 21)})`;
+}
 
 export default function MatchHistory() {
   const { isAdmin } = useAuth();
@@ -212,6 +220,18 @@ export default function MatchHistory() {
                     ) : null}
                   </div>
                   <div className="flex items-center gap-3 text-sm shrink-0 ml-3">
+                    {(() => {
+                      const odds = preMatchWinnerOdds(match);
+                      return odds != null ? (
+                        <span
+                          className="text-xs tabular-nums"
+                          style={{ color: oddsColor(odds) }}
+                          title="Winner's pre-match win odds"
+                        >
+                          {Math.round(odds * 100)}%
+                        </span>
+                      ) : null;
+                    })()}
                     {match.tournamentMatchId != null && (
                       <span className="text-amber-400 text-xs font-medium px-2 py-0.5 bg-amber-400/10 rounded-full">
                         TOURNAMENT
