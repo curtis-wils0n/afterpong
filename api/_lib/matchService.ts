@@ -140,75 +140,68 @@ export async function createMatch(
   );
   const rated = rateMatch(winnerPre, loserPre);
 
-  const [match] = await db
-    .insert(matches)
-    .values({
-      winnerId,
-      loserId,
-      winnerScore: seriesWinnerScore,
-      loserScore: seriesLoserScore,
-      winnerRatingChange: rated.winner.rating - winner.rating,
-      loserRatingChange: rated.loser.rating - loser.rating,
-      winnerRatingBefore: winner.rating,
-      winnerRdBefore: winner.rd,
-      winnerVolBefore: winner.volatility,
-      winnerLastMatchBefore: winner.lastMatchAt,
-      loserRatingBefore: loser.rating,
-      loserRdBefore: loser.rd,
-      loserVolBefore: loser.volatility,
-      loserLastMatchBefore: loser.lastMatchAt,
-      isChallenge: !!isChallenge,
-      games: validatedGames,
-      winnerRankBefore: winner.challengeRank,
-      loserRankBefore: loser.challengeRank,
-      tournamentMatchId: tournamentMatchId ?? null,
-      createdAt: now,
-    })
-    .returning();
+  // All writes (match insert, both rating updates, rank swap) commit or roll
+  // back together. Queries inside a transaction share one connection, so they
+  // run sequentially.
+  const swapRanks =
+    !!isChallenge &&
+    winner.challengeRank != null &&
+    loser.challengeRank != null &&
+    winner.challengeRank > loser.challengeRank;
 
-  await Promise.all([
-    db
+  const match = await db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(matches)
+      .values({
+        winnerId,
+        loserId,
+        winnerScore: seriesWinnerScore,
+        loserScore: seriesLoserScore,
+        winnerRatingChange: rated.winner.rating - winner.rating,
+        loserRatingChange: rated.loser.rating - loser.rating,
+        winnerRatingBefore: winner.rating,
+        winnerRdBefore: winner.rd,
+        winnerVolBefore: winner.volatility,
+        winnerLastMatchBefore: winner.lastMatchAt,
+        loserRatingBefore: loser.rating,
+        loserRdBefore: loser.rd,
+        loserVolBefore: loser.volatility,
+        loserLastMatchBefore: loser.lastMatchAt,
+        isChallenge: !!isChallenge,
+        games: validatedGames,
+        winnerRankBefore: winner.challengeRank,
+        loserRankBefore: loser.challengeRank,
+        tournamentMatchId: tournamentMatchId ?? null,
+        createdAt: now,
+      })
+      .returning();
+
+    await tx
       .update(players)
       .set({
         rating: rated.winner.rating,
         rd: rated.winner.rd,
         volatility: rated.winner.volatility,
         lastMatchAt: now,
+        ...(swapRanks ? { challengeRank: loser.challengeRank } : {}),
       })
-      .where(eq(players.id, winnerId)),
-    db
+      .where(eq(players.id, winnerId));
+    await tx
       .update(players)
       .set({
         rating: rated.loser.rating,
         rd: rated.loser.rd,
         volatility: rated.loser.volatility,
         lastMatchAt: now,
+        ...(swapRanks ? { challengeRank: winner.challengeRank } : {}),
       })
-      .where(eq(players.id, loserId)),
-  ]);
+      .where(eq(players.id, loserId));
 
-  // Challenge rank swap if the lower-ranked player won
-  let updatedWinnerRank = winner.challengeRank;
-  let updatedLoserRank = loser.challengeRank;
-  if (
-    isChallenge &&
-    winner.challengeRank != null &&
-    loser.challengeRank != null &&
-    winner.challengeRank > loser.challengeRank
-  ) {
-    await Promise.all([
-      db
-        .update(players)
-        .set({ challengeRank: loser.challengeRank })
-        .where(eq(players.id, winner.id)),
-      db
-        .update(players)
-        .set({ challengeRank: winner.challengeRank })
-        .where(eq(players.id, loser.id)),
-    ]);
-    updatedWinnerRank = loser.challengeRank;
-    updatedLoserRank = winner.challengeRank;
-  }
+    return inserted;
+  });
+
+  const updatedWinnerRank = swapRanks ? loser.challengeRank : winner.challengeRank;
+  const updatedLoserRank = swapRanks ? winner.challengeRank : loser.challengeRank;
 
   return {
     ok: true,

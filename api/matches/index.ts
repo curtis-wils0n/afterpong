@@ -151,90 +151,83 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Revert ratings from the pre-match snapshots (exact restore of rating,
-    // RD, volatility, and last-match time). Falls back to subtracting the
-    // rating change for legacy rows without snapshots.
-    await Promise.all([
-      db.update(players)
-        .set(
-          latest.winnerRatingBefore != null
+    // All undo writes commit or roll back together.
+    await db.transaction(async (tx) => {
+      // Revert ratings from the pre-match snapshots (exact restore of rating,
+      // RD, volatility, and last-match time). Falls back to subtracting the
+      // rating change for legacy rows without snapshots.
+      const revertRanks =
+        latest.isChallenge &&
+        latest.winnerRankBefore != null &&
+        latest.loserRankBefore != null &&
+        latest.winnerRankBefore > latest.loserRankBefore; // lower-ranked won = swap happened
+
+      await tx
+        .update(players)
+        .set({
+          ...(latest.winnerRatingBefore != null
             ? {
                 rating: latest.winnerRatingBefore,
                 rd: latest.winnerRdBefore!,
                 volatility: latest.winnerVolBefore!,
                 lastMatchAt: latest.winnerLastMatchBefore,
               }
-            : { rating: winner.rating - latest.winnerRatingChange },
-        )
-        .where(eq(players.id, winner.id)),
-      db.update(players)
-        .set(
-          latest.loserRatingBefore != null
+            : { rating: winner.rating - latest.winnerRatingChange }),
+          ...(revertRanks ? { challengeRank: latest.winnerRankBefore } : {}),
+        })
+        .where(eq(players.id, winner.id));
+      await tx
+        .update(players)
+        .set({
+          ...(latest.loserRatingBefore != null
             ? {
                 rating: latest.loserRatingBefore,
                 rd: latest.loserRdBefore!,
                 volatility: latest.loserVolBefore!,
                 lastMatchAt: latest.loserLastMatchBefore,
               }
-            : { rating: loser.rating - latest.loserRatingChange },
-        )
-        .where(eq(players.id, loser.id)),
-    ]);
+            : { rating: loser.rating - latest.loserRatingChange }),
+          ...(revertRanks ? { challengeRank: latest.loserRankBefore } : {}),
+        })
+        .where(eq(players.id, loser.id));
 
-    // Revert challenge rank swap if one happened
-    if (
-      latest.isChallenge &&
-      latest.winnerRankBefore != null &&
-      latest.loserRankBefore != null &&
-      latest.winnerRankBefore > latest.loserRankBefore // lower-ranked player won = swap happened
-    ) {
-      // Simple swap back to original ranks
-      await Promise.all([
-        db.update(players)
-          .set({ challengeRank: latest.winnerRankBefore })
-          .where(eq(players.id, winner.id)),
-        db.update(players)
-          .set({ challengeRank: latest.loserRankBefore })
-          .where(eq(players.id, loser.id)),
-      ]);
-    }
+      // Revert tournament bracket advancement
+      if (tournamentMatch) {
+        // Clear the played match link on the tournament match
+        await tx
+          .update(tournamentMatches)
+          .set({ matchId: null, winnerId: null })
+          .where(eq(tournamentMatches.id, tournamentMatch.id));
 
-    // Revert tournament bracket advancement
-    if (tournamentMatch) {
-      // Clear the played match link on the tournament match
-      await db
-        .update(tournamentMatches)
-        .set({ matchId: null, winnerId: null })
-        .where(eq(tournamentMatches.id, tournamentMatch.id));
+        // If the winner had advanced to the next round, clear that slot
+        if (nextRoundMatch && tournamentMatch.winnerId != null) {
+          const advancedAsP1 = nextRoundMatch.player1Id === tournamentMatch.winnerId;
+          const advancedAsP2 = nextRoundMatch.player2Id === tournamentMatch.winnerId;
+          if (advancedAsP1) {
+            await tx
+              .update(tournamentMatches)
+              .set({ player1Id: null })
+              .where(eq(tournamentMatches.id, nextRoundMatch.id));
+          } else if (advancedAsP2) {
+            await tx
+              .update(tournamentMatches)
+              .set({ player2Id: null })
+              .where(eq(tournamentMatches.id, nextRoundMatch.id));
+          }
+        }
 
-      // If the winner had advanced to the next round, clear that slot
-      if (nextRoundMatch && tournamentMatch.winnerId != null) {
-        const advancedAsP1 = nextRoundMatch.player1Id === tournamentMatch.winnerId;
-        const advancedAsP2 = nextRoundMatch.player2Id === tournamentMatch.winnerId;
-        if (advancedAsP1) {
-          await db
-            .update(tournamentMatches)
-            .set({ player1Id: null })
-            .where(eq(tournamentMatches.id, nextRoundMatch.id));
-        } else if (advancedAsP2) {
-          await db
-            .update(tournamentMatches)
-            .set({ player2Id: null })
-            .where(eq(tournamentMatches.id, nextRoundMatch.id));
+        // If this was the final and the tournament was completed, revert it to active
+        if (!nextRoundMatch) {
+          await tx
+            .update(tournaments)
+            .set({ status: 'active', winnerId: null, completedAt: null })
+            .where(eq(tournaments.id, tournamentMatch.tournamentId));
         }
       }
 
-      // If this was the final and the tournament was completed, revert it to active
-      if (!nextRoundMatch) {
-        await db
-          .update(tournaments)
-          .set({ status: 'active', winnerId: null, completedAt: null })
-          .where(eq(tournaments.id, tournamentMatch.tournamentId));
-      }
-    }
-
-    // Delete the match
-    await db.delete(matches).where(eq(matches.id, latest.id));
+      // Delete the match
+      await tx.delete(matches).where(eq(matches.id, latest.id));
+    });
 
     return res.json(latest);
   }
