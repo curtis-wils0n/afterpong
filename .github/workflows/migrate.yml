@@ -5,8 +5,11 @@ name: Migrate
 # and this keeps a visible migration log per change.
 #
 # - Pushes to main migrate the production database.
-# - Pull requests migrate the PR's Neon preview branch (created by the
-#   Vercel-Neon integration as preview/<git-branch>).
+# - Successful preview deployments migrate that branch's Neon preview
+#   database (created by the Vercel-Neon integration as preview/<git-branch>).
+#   Triggering on deployment_status instead of pull_request makes the Neon
+#   branch's existence a real dependency: the integration provisions it when
+#   the build starts, so a successful deployment guarantees it exists.
 on:
   push:
     branches: [main]
@@ -14,11 +17,7 @@ on:
       - 'drizzle/**'
       - 'drizzle.config.ts'
       - '.github/workflows/migrate.yml'
-  pull_request:
-    paths:
-      - 'drizzle/**'
-      - 'drizzle.config.ts'
-      - '.github/workflows/migrate.yml'
+  deployment_status:
   workflow_dispatch:
 
 jobs:
@@ -37,34 +36,42 @@ jobs:
           STORAGE_DATABASE_URL: ${{ secrets.STORAGE_DATABASE_URL }}
 
   migrate-preview:
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'deployment_status' &&
+      github.event.deployment_status.state == 'success' &&
+      github.event.deployment.environment == 'Preview' &&
+      github.event.deployment.ref != 'main'
     runs-on: ubuntu-latest
     env:
       NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
       NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
-      NEON_BRANCH: preview/${{ github.head_ref }}
+      NEON_BRANCH: preview/${{ github.event.deployment.ref }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.deployment.sha }}
+          fetch-depth: 0
+      # deployment_status can't be path-filtered, so skip cheaply when the
+      # deployed branch doesn't change any migrations.
+      - name: Check for migration changes
+        id: changes
+        run: |
+          git fetch origin main --quiet
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD -- drizzle/ drizzle.config.ts | grep -q .; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No migration changes; skipping."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-node@v4
+        if: steps.changes.outputs.changed == 'true'
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      # The Vercel-Neon integration creates the branch when the first preview
-      # deployment starts, which races this job on newly opened PRs.
-      - name: Wait for Neon preview branch
-        run: |
-          for i in $(seq 1 24); do
-            if npx neonctl branches get "$NEON_BRANCH" --project-id "$NEON_PROJECT_ID" >/dev/null 2>&1; then
-              echo "Found $NEON_BRANCH"
-              exit 0
-            fi
-            echo "Waiting for $NEON_BRANCH ($i)..."
-            sleep 10
-          done
-          echo "Neon branch $NEON_BRANCH was not created (no preview deployment?)"
-          exit 1
+        if: steps.changes.outputs.changed == 'true'
       - name: Migrate preview branch
+        if: steps.changes.outputs.changed == 'true'
         run: |
           STORAGE_DATABASE_URL="$(npx neonctl connection-string "$NEON_BRANCH" --project-id "$NEON_PROJECT_ID")"
           export STORAGE_DATABASE_URL
