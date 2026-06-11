@@ -273,7 +273,11 @@ export default function PlayerProfile() {
                   fontSize: '13px',
                 }}
                 labelStyle={{ display: 'none' }}
-                formatter={(value) => [`${value}`, 'Rating']}
+                formatter={(value, _name, item) => {
+                  const band = (item?.payload as { band?: [number, number] | null } | undefined)?.band;
+                  const unc = band ? Math.round((band[1] - band[0]) / 2) : null;
+                  return [unc != null ? `${value} \u00b1${unc}` : `${value}`, 'Rating'];
+                }}
                 labelFormatter={(_label, payload) => {
                   const data = payload?.[0]?.payload as { opponent?: string; date?: string } | undefined;
                   if (!data?.opponent) return '';
