@@ -138,10 +138,11 @@ export default function PlayerProfile() {
     return points;
   })();
 
+  // Scale the axis to the skill line, not the ribbon — early-career bands
+  // are enormous (±700 at debut) and flatten the line if included. The
+  // ribbon clips off-canvas where it's wider than the view.
   const yAxis = (() => {
-    const values = ratingHistory.flatMap((pt) =>
-      pt.band ? [pt.band[0], pt.band[1]] : [pt.rating],
-    );
+    const values = ratingHistory.map((pt) => pt.rating);
     return niceAxis(Math.min(...values), Math.max(...values));
   })();
 
@@ -269,6 +270,7 @@ export default function PlayerProfile() {
               <YAxis
                 domain={yAxis.domain}
                 ticks={yAxis.ticks}
+                allowDataOverflow
                 tick={{ fill: '#64748b', fontSize: 12 }}
                 width={40}
                 axisLine={false}
