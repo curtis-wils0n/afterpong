@@ -1,8 +1,12 @@
 name: Migrate
 
-# Applies database migrations when main changes. Runs from CI rather than the
-# Vercel build: build containers get the wrong DB URL on preview deploys and
-# swallow build logs, and this keeps a visible migration log per merge.
+# Applies database migrations from CI rather than the Vercel build: build
+# containers get the wrong DB URL on preview deploys and swallow build logs,
+# and this keeps a visible migration log per change.
+#
+# - Pushes to main migrate the production database.
+# - Pull requests migrate the PR's Neon preview branch (created by the
+#   Vercel-Neon integration as preview/<git-branch>).
 on:
   push:
     branches: [main]
@@ -10,10 +14,16 @@ on:
       - 'drizzle/**'
       - 'drizzle.config.ts'
       - '.github/workflows/migrate.yml'
+  pull_request:
+    paths:
+      - 'drizzle/**'
+      - 'drizzle.config.ts'
+      - '.github/workflows/migrate.yml'
   workflow_dispatch:
 
 jobs:
-  migrate:
+  migrate-production:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,3 +35,37 @@ jobs:
       - run: npx drizzle-kit migrate
         env:
           STORAGE_DATABASE_URL: ${{ secrets.STORAGE_DATABASE_URL }}
+
+  migrate-preview:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+      NEON_BRANCH: preview/${{ github.head_ref }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The Vercel-Neon integration creates the branch when the first preview
+      # deployment starts, which races this job on newly opened PRs.
+      - name: Wait for Neon preview branch
+        run: |
+          for i in $(seq 1 24); do
+            if npx neonctl branches get "$NEON_BRANCH" --project-id "$NEON_PROJECT_ID" >/dev/null 2>&1; then
+              echo "Found $NEON_BRANCH"
+              exit 0
+            fi
+            echo "Waiting for $NEON_BRANCH ($i)..."
+            sleep 10
+          done
+          echo "Neon branch $NEON_BRANCH was not created (no preview deployment?)"
+          exit 1
+      - name: Migrate preview branch
+        run: |
+          STORAGE_DATABASE_URL="$(npx neonctl connection-string "$NEON_BRANCH" --project-id "$NEON_PROJECT_ID")"
+          export STORAGE_DATABASE_URL
+          npx drizzle-kit migrate
