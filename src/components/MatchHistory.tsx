@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth';
 import { isUpset } from '../../lib/glicko';
 import { hasPointScores } from '../../lib/games';
 import type { Match, Player } from '../types';
+import LogMatchModal from './LogMatchModal';
 
 const PAGE_SIZE = 25;
 
@@ -59,6 +60,7 @@ export default function MatchHistory() {
   }, [filter1, filter2]);
 
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [showLogMatch, setShowLogMatch] = useState(false);
 
   const handleDelete = async (match: Match) => {
     if (
@@ -111,7 +113,16 @@ export default function MatchHistory() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Match History</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Match History</h1>
+        <button
+          onClick={() => setShowLogMatch(true)}
+          disabled={players.length < 2}
+          className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg font-medium transition-colors"
+        >
+          Log Match
+        </button>
+      </div>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="flex-1">
@@ -252,6 +263,17 @@ export default function MatchHistory() {
             </div>
           ))}
         </div>
+      )}
+
+      {showLogMatch && (
+        <LogMatchModal
+          players={players}
+          onClose={() => setShowLogMatch(false)}
+          onLogged={() => {
+            setShowLogMatch(false);
+            fetchMatches();
+          }}
+        />
       )}
 
       {total > PAGE_SIZE && (
