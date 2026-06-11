@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
+import { expectedScore } from '../../lib/glicko';
 import type { Player } from '../types';
 
 interface Props {
@@ -307,6 +308,16 @@ export default function LogMatchModal({
                   {player2.name}
                 </span>
               </div>
+              {(() => {
+                const p1Odds = Math.round(expectedScore(player1, player2) * 100);
+                return (
+                  <p className="text-xs text-slate-500 mt-1 tabular-nums">
+                    win odds: <span className="text-slate-300">{p1Odds}%</span>
+                    <span className="text-slate-600"> — </span>
+                    <span className="text-slate-300">{100 - p1Odds}%</span>
+                  </p>
+                );
+              })()}
               {trackPoints && (
                 <p className="text-xs text-slate-600 mt-1">
                   Tip: press <kbd className="px-1 py-0.5 bg-slate-700 rounded text-slate-400">&larr;</kbd> <kbd className="px-1 py-0.5 bg-slate-700 rounded text-slate-400">&rarr;</kbd> arrow keys to score points

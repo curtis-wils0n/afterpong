@@ -5,6 +5,10 @@
     }
   },
   "rewrites": [
-    { "source": "/((?!api/|@|src/|node_modules/|.*\\.).*)", "destination": "/" }
-  ]
+    {
+      "source": "/((?!api/|@|src/|node_modules/|.*\\.).*)",
+      "destination": "/"
+    }
+  ],
+  "buildCommand": "npm run db:migrate && npm run build"
 }

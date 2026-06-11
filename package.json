@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
+    "db:migrate": "drizzle-kit migrate",
     "db:backfill-glicko": "npx tsx --env-file=.env db/backfill-glicko.ts",
     "db:normalize-scoreless": "npx tsx --env-file=.env db/normalize-scoreless-games.ts",
     "db:studio": "drizzle-kit studio",
