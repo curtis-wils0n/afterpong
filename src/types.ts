@@ -102,6 +102,8 @@ export interface StreakMatch {
   date: string;
   // The player's pre-match win probability (null for legacy rows).
   winProb: number | null;
+  // Set on stat-detail matches that mix wins and losses.
+  won?: boolean;
 }
 
 export interface StreakEntry {
@@ -202,7 +204,12 @@ export interface StatsResponse {
   };
   probability: {
     giantSlayer: {
-      entries: { player: PlayerRef; wae: number; games: number }[];
+      entries: {
+        player: PlayerRef;
+        wae: number;
+        games: number;
+        matches: StreakMatch[];
+      }[];
       wae: number;
     } | null;
     mostImprobableStreak: {
@@ -213,23 +220,45 @@ export interface StatsResponse {
       endDate: string;
       matches: StreakMatch[];
     } | null;
-    upsetMagnet: { players: PlayerRef[]; count: number } | null;
+    upsetMagnet: {
+      entries: { player: PlayerRef; matches: StreakMatch[] }[];
+      count: number;
+    } | null;
     hardestSchedule: {
-      entries: { player: PlayerRef; games: number }[];
+      entries: {
+        player: PlayerRef;
+        games: number;
+        opponents: { opponent: PlayerRef; games: number; avgWinProb: number }[];
+      }[];
       avgWinProb: number;
     } | null;
     chaosAgent: {
-      entries: { player: PlayerRef; games: number }[];
+      entries: {
+        player: PlayerRef;
+        games: number;
+        matches: StreakMatch[];
+      }[];
       brier: number;
     } | null;
   };
   clutch: {
     clutchRecord: {
-      entries: { player: PlayerRef; wins: number; losses: number }[];
+      entries: {
+        player: PlayerRef;
+        wins: number;
+        losses: number;
+        matches: StreakMatch[];
+      }[];
       rate: number;
     } | null;
-    comebackArtist: { players: PlayerRef[]; count: number } | null;
-    bagels: { players: PlayerRef[]; count: number } | null;
+    comebackArtist: {
+      entries: { player: PlayerRef; matches: StreakMatch[] }[];
+      count: number;
+    } | null;
+    bagels: {
+      entries: { player: PlayerRef; matches: StreakMatch[] }[];
+      count: number;
+    } | null;
   };
   ratingHistory: {
     players: {

@@ -32,6 +32,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const getRef = (id: number): PlayerRef =>
     playerMap.get(id) ?? { id, name: `Player #${id}` };
 
+  // Winner's pre-match win probability from the stored snapshots (null for
+  // legacy rows without them).
+  type AnyMatch = (typeof allMatches)[number];
+  const winnerOddsOf = (m: AnyMatch): number | null =>
+    m.winnerRatingBefore != null &&
+    m.winnerRdBefore != null &&
+    m.loserRatingBefore != null &&
+    m.loserRdBefore != null
+      ? expectedScore(
+          { rating: m.winnerRatingBefore, rd: m.winnerRdBefore },
+          { rating: m.loserRatingBefore, rd: m.loserRdBefore },
+        )
+      : null;
+
   // Per-player accumulators
   type StreakMatchRef = {
     opponentId: number;
@@ -170,16 +184,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Pre-match win probability for the winner (null for legacy rows
     // without snapshots). Powers the probability stats below.
-    const winnerOdds =
-      m.winnerRatingBefore != null &&
-      m.winnerRdBefore != null &&
-      m.loserRatingBefore != null &&
-      m.loserRdBefore != null
-        ? expectedScore(
-            { rating: m.winnerRatingBefore, rd: m.winnerRdBefore },
-            { rating: m.loserRatingBefore, rd: m.loserRdBefore },
-          )
-        : null;
+    const winnerOdds = winnerOddsOf(m);
 
     const ts = m.createdAt.toISOString();
     ratingHistory.get(m.winnerId)!.push({ t: ts, rating: Math.round(winner.currentRating) });
@@ -518,6 +523,133 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   });
   const comebackArtist = pickAllMax(playerList, (p) => acc.get(p.id)!.comebacks);
   const bagels = pickAllMax(playerList, (p) => acc.get(p.id)!.bagels);
+
+  // --- Hover detail lists for the stat winners (capped, built lazily so we
+  // only pay for the players that actually top a stat) ---
+  const DETAIL_CAP = 8;
+  const TOP_CAP = 5;
+
+  type DetailMatch = {
+    opponent: PlayerRef;
+    playerScore: number | null;
+    opponentScore: number | null;
+    date: string;
+    winProb: number | null;
+    won: boolean;
+  };
+
+  const detailFromMatch = (m: AnyMatch, pid: number): DetailMatch => {
+    const won = m.winnerId === pid;
+    const odds = winnerOddsOf(m);
+    return {
+      opponent: getRef(won ? m.loserId : m.winnerId),
+      playerScore: won ? m.winnerScore : m.loserScore,
+      opponentScore: won ? m.loserScore : m.winnerScore,
+      date: m.createdAt.toISOString(),
+      winProb: odds == null ? null : won ? odds : 1 - odds,
+      won,
+    };
+  };
+
+  const matchesOf = (pid: number) =>
+    allMatches.filter((m) => m.winnerId === pid || m.loserId === pid);
+
+  // Upset losses, most embarrassing (highest own odds) first.
+  const upsetLossesFor = (pid: number): DetailMatch[] =>
+    matchesOf(pid)
+      .filter((m) => m.loserId === pid && isUpset(m))
+      .map((m) => detailFromMatch(m, pid))
+      .sort((a, b) => (b.winProb ?? 0) - (a.winProb ?? 0))
+      .slice(0, DETAIL_CAP);
+
+  // Matches where the player dealt a bagel; scores show the 11-0 game itself.
+  const bagelMatchesFor = (pid: number): DetailMatch[] => {
+    const out: DetailMatch[] = [];
+    for (const m of allMatches) {
+      if (!Array.isArray(m.games)) continue;
+      const dealt = m.games.find((g) =>
+        g.winnerScore != null && g.loserScore != null &&
+        ((m.winnerId === pid && g.winnerScore >= 11 && g.loserScore === 0) ||
+          (m.loserId === pid && g.loserScore >= 11 && g.winnerScore === 0)),
+      );
+      if (!dealt) continue;
+      const won = m.winnerId === pid;
+      out.push({
+        ...detailFromMatch(m, pid),
+        playerScore: won ? dealt.winnerScore : dealt.loserScore,
+        opponentScore: 0,
+      });
+    }
+    return out.slice(-DETAIL_CAP);
+  };
+
+  const comebacksFor = (pid: number): DetailMatch[] =>
+    matchesOf(pid)
+      .filter(
+        (m) =>
+          m.winnerId === pid &&
+          Array.isArray(m.games) &&
+          m.games.length >= 2 &&
+          !gameWonByMatchWinner(m.games[0]),
+      )
+      .map((m) => detailFromMatch(m, pid))
+      .slice(-DETAIL_CAP);
+
+  const decidersFor = (pid: number): DetailMatch[] =>
+    matchesOf(pid)
+      .filter((m) => {
+        if (!Array.isArray(m.games) || m.games.length < 3) return false;
+        const w = m.games.filter(gameWonByMatchWinner).length;
+        return w - (m.games.length - w) === 1;
+      })
+      .map((m) => detailFromMatch(m, pid))
+      .slice(-DETAIL_CAP);
+
+  // The wins that drove a Giant Slayer's number: lowest pre-match odds first.
+  const topUpsetWinsFor = (pid: number): DetailMatch[] =>
+    matchesOf(pid)
+      .filter((m) => m.winnerId === pid)
+      .map((m) => detailFromMatch(m, pid))
+      .filter((d) => d.winProb != null)
+      .sort((a, b) => a.winProb! - b.winProb!)
+      .slice(0, TOP_CAP);
+
+  // Most surprising results in either direction.
+  const topSurprisesFor = (pid: number): DetailMatch[] =>
+    matchesOf(pid)
+      .map((m) => detailFromMatch(m, pid))
+      .filter((d) => d.winProb != null)
+      .sort((a, b) => {
+        const sa = (a.won ? 1 - a.winProb! : a.winProb!) ** 2;
+        const sb = (b.won ? 1 - b.winProb! : b.winProb!) ** 2;
+        return sb - sa;
+      })
+      .slice(0, TOP_CAP);
+
+  // Hardest Schedule: who they keep playing, at what average odds.
+  const opponentBreakdownFor = (
+    pid: number,
+  ): { opponent: PlayerRef; games: number; avgWinProb: number }[] => {
+    const byOpp = new Map<number, { n: number; sum: number }>();
+    for (const m of matchesOf(pid)) {
+      const odds = winnerOddsOf(m);
+      if (odds == null) continue;
+      const oppId = m.winnerId === pid ? m.loserId : m.winnerId;
+      const own = m.winnerId === pid ? odds : 1 - odds;
+      const rec = byOpp.get(oppId) ?? { n: 0, sum: 0 };
+      rec.n += 1;
+      rec.sum += own;
+      byOpp.set(oppId, rec);
+    }
+    return [...byOpp.entries()]
+      .sort((a, b) => b[1].n - a[1].n)
+      .slice(0, DETAIL_CAP)
+      .map(([oppId, rec]) => ({
+        opponent: getRef(oppId),
+        games: rec.n,
+        avgWinProb: rec.sum / rec.n,
+      }));
+  };
   const highWinRate = pickAllMax(playerList, (p) => {
     const a = acc.get(p.id)!;
     const total = a.wins + a.losses;
@@ -886,6 +1018,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 player: pl,
                 wae: Math.round(acc.get(pl.id)!.waeSum * 10) / 10,
                 games: acc.get(pl.id)!.probGames,
+                matches: topUpsetWinsFor(pl.id),
               })),
               wae: Math.round(giantSlayer.score * 10) / 10,
             }
@@ -906,13 +1039,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             })),
           }
         : null,
-      upsetMagnet: wrapCount(upsetMagnet),
+      upsetMagnet:
+        upsetMagnet && upsetMagnet.score > 0
+          ? {
+              entries: upsetMagnet.players.map((pl) => ({
+                player: pl,
+                matches: upsetLossesFor(pl.id),
+              })),
+              count: upsetMagnet.score,
+            }
+          : null,
       hardestSchedule:
         hardestSchedule && Number.isFinite(hardestSchedule.score)
           ? {
               entries: hardestSchedule.players.map((pl) => ({
                 player: pl,
                 games: acc.get(pl.id)!.probGames,
+                opponents: opponentBreakdownFor(pl.id),
               })),
               avgWinProb: -hardestSchedule.score,
             }
@@ -923,6 +1066,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               entries: chaosAgent.players.map((pl) => ({
                 player: pl,
                 games: acc.get(pl.id)!.probGames,
+                matches: topSurprisesFor(pl.id),
               })),
               brier: chaosAgent.score,
             }
@@ -936,12 +1080,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 player: pl,
                 wins: acc.get(pl.id)!.clutchWins,
                 losses: acc.get(pl.id)!.clutchLosses,
+                matches: decidersFor(pl.id),
               })),
               rate: clutchRecord.score,
             }
           : null,
-      comebackArtist: wrapCount(comebackArtist),
-      bagels: wrapCount(bagels),
+      comebackArtist:
+        comebackArtist && comebackArtist.score > 0
+          ? {
+              entries: comebackArtist.players.map((pl) => ({
+                player: pl,
+                matches: comebacksFor(pl.id),
+              })),
+              count: comebackArtist.score,
+            }
+          : null,
+      bagels:
+        bagels && bagels.score > 0
+          ? {
+              entries: bagels.players.map((pl) => ({
+                player: pl,
+                matches: bagelMatchesFor(pl.id),
+              })),
+              count: bagels.score,
+            }
+          : null,
     },
     relationships: {
       // Most matches played together first.

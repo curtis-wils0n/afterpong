@@ -189,7 +189,8 @@ function StreakMatchList({
   isWin: boolean;
   showOdds?: boolean;
 }) {
-  const scoreClass = isWin ? 'text-emerald-400' : 'text-red-400';
+  const scoreClass = (m: StreakMatch) =>
+    (m.won ?? isWin) ? 'text-emerald-400' : 'text-red-400';
   return (
     <div className="flex flex-col gap-1">
       {matches.map((m, i) => (
@@ -198,7 +199,7 @@ function StreakMatchList({
           <span className="text-slate-300 truncate">{m.opponent.name}</span>
           <span className="ml-auto flex items-center gap-2">
             {m.playerScore != null && m.opponentScore != null && (
-              <span className={`tabular-nums ${scoreClass}`}>
+              <span className={`tabular-nums ${scoreClass(m)}`}>
                 {m.playerScore}-{m.opponentScore}
               </span>
             )}
@@ -230,6 +231,47 @@ function streakTooltipContent(entries: StreakEntry[], isWin: boolean) {
         </div>
       ))}
     </div>
+  );
+}
+
+function detailTooltipContent(
+  entries: { player: PlayerRef; matches: StreakMatch[] }[],
+  showOdds: boolean,
+) {
+  if (entries.length === 1) {
+    return (
+      <StreakMatchList matches={entries[0].matches} isWin showOdds={showOdds} />
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {entries.map((e) => (
+        <div key={e.player.id}>
+          <div className="text-slate-200 font-medium mb-1">{e.player.name}</div>
+          <StreakMatchList matches={e.matches} isWin showOdds={showOdds} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DetailValue({
+  entries,
+  showOdds,
+  children,
+}: {
+  entries: { player: PlayerRef; matches: StreakMatch[] }[];
+  showOdds?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip
+      align="left"
+      widthClass="w-72"
+      content={detailTooltipContent(entries, showOdds ?? false)}
+    >
+      <span className="cursor-help">{children}</span>
+    </Tooltip>
   );
 }
 
@@ -879,7 +921,11 @@ export default function Stats() {
         {stats.probability.giantSlayer ? (
           <StatCard
             label="Giant Slayer"
-            value={`+${stats.probability.giantSlayer.wae} wins`}
+            value={
+              <DetailValue entries={stats.probability.giantSlayer.entries} showOdds>
+                +{stats.probability.giantSlayer.wae} wins
+              </DetailValue>
+            }
             valueClass="text-yellow-400"
             tooltip={TIPS.giantSlayer}
           >
@@ -937,11 +983,15 @@ export default function Stats() {
         {stats.probability.upsetMagnet ? (
           <StatCard
             label="Upset Magnet"
-            value={String(stats.probability.upsetMagnet.count)}
+            value={
+              <DetailValue entries={stats.probability.upsetMagnet.entries} showOdds>
+                {stats.probability.upsetMagnet.count}
+              </DetailValue>
+            }
             valueClass="text-red-400"
             tooltip={TIPS.upsetMagnet}
           >
-            <PlayerLinks players={stats.probability.upsetMagnet.players} />
+            <PlayerLinks players={stats.probability.upsetMagnet.entries.map((e) => e.player)} />
           </StatCard>
         ) : (
           <NoData label="Upset Magnet" tooltip={TIPS.upsetMagnet} />
@@ -950,7 +1000,32 @@ export default function Stats() {
         {stats.probability.hardestSchedule ? (
           <StatCard
             label="Hardest Schedule"
-            value={`${Math.round(stats.probability.hardestSchedule.avgWinProb * 100)}% avg odds`}
+            value={
+              <Tooltip
+                align="left"
+                widthClass="w-72"
+                content={
+                  <div className="flex flex-col gap-1">
+                    {stats.probability.hardestSchedule.entries[0].opponents.map((o) => (
+                      <div key={o.opponent.id} className="flex items-center gap-2">
+                        <span className="text-slate-600">vs</span>
+                        <span className="text-slate-300 truncate">{o.opponent.name}</span>
+                        <span className="ml-auto flex items-center gap-2">
+                          <span className="text-slate-400 tabular-nums">×{o.games}</span>
+                          <span className="text-yellow-400/80 tabular-nums">
+                            {Math.round(o.avgWinProb * 100)}%
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                }
+              >
+                <span className="cursor-help">
+                  {Math.round(stats.probability.hardestSchedule.avgWinProb * 100)}% avg odds
+                </span>
+              </Tooltip>
+            }
             tooltip={TIPS.hardestSchedule}
           >
             {stats.probability.hardestSchedule.entries.map((e) => (
@@ -967,7 +1042,11 @@ export default function Stats() {
         {stats.probability.chaosAgent ? (
           <StatCard
             label="Chaos Agent"
-            value={stats.probability.chaosAgent.brier.toFixed(2)}
+            value={
+              <DetailValue entries={stats.probability.chaosAgent.entries} showOdds>
+                {stats.probability.chaosAgent.brier.toFixed(2)}
+              </DetailValue>
+            }
             valueClass="text-purple-400"
             tooltip={TIPS.chaosAgent}
           >
@@ -989,7 +1068,11 @@ export default function Stats() {
         {stats.clutch.clutchRecord ? (
           <StatCard
             label="Clutch Rating"
-            value={`${Math.round(stats.clutch.clutchRecord.rate * 100)}%`}
+            value={
+              <DetailValue entries={stats.clutch.clutchRecord.entries}>
+                {Math.round(stats.clutch.clutchRecord.rate * 100)}%
+              </DetailValue>
+            }
             valueClass="text-emerald-400"
             tooltip={TIPS.clutchRecord}
           >
@@ -1010,11 +1093,15 @@ export default function Stats() {
         {stats.clutch.comebackArtist ? (
           <StatCard
             label="Comeback Artist"
-            value={String(stats.clutch.comebackArtist.count)}
+            value={
+              <DetailValue entries={stats.clutch.comebackArtist.entries}>
+                {stats.clutch.comebackArtist.count}
+              </DetailValue>
+            }
             valueClass="text-emerald-400"
             tooltip={TIPS.comebackArtist}
           >
-            <PlayerLinks players={stats.clutch.comebackArtist.players} />
+            <PlayerLinks players={stats.clutch.comebackArtist.entries.map((e) => e.player)} />
           </StatCard>
         ) : (
           <NoData label="Comeback Artist" tooltip={TIPS.comebackArtist} />
@@ -1023,11 +1110,15 @@ export default function Stats() {
         {stats.clutch.bagels ? (
           <StatCard
             label="Bagels Dealt"
-            value={String(stats.clutch.bagels.count)}
+            value={
+              <DetailValue entries={stats.clutch.bagels.entries}>
+                {stats.clutch.bagels.count}
+              </DetailValue>
+            }
             valueClass="text-amber-400"
             tooltip={TIPS.bagels}
           >
-            <PlayerLinks players={stats.clutch.bagels.players} />
+            <PlayerLinks players={stats.clutch.bagels.entries.map((e) => e.player)} />
           </StatCard>
         ) : (
           <NoData label="Bagels Dealt" tooltip={TIPS.bagels} />
