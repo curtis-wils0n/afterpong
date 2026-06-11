@@ -1,7 +1,8 @@
 import { eq, and, gt, lt } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { players, matches } from '../../db/schema.js';
-import { calculateEloChange } from '../../lib/elo.js';
+import { inflateRd, rateMatch, daysBetween } from '../../lib/glicko.js';
+import { gameWonByMatchWinner, isScoredGame, type GameScore } from '../../lib/games.js';
 
 export interface CreateMatchInput {
   winnerId: number;
@@ -9,18 +10,19 @@ export interface CreateMatchInput {
   winnerScore?: number | null;
   loserScore?: number | null;
   isChallenge?: boolean;
-  games?: { winnerScore: number; loserScore: number }[] | null;
+  games?: GameScore[] | null;
   tournamentMatchId?: number | null;
 }
 
 export type CreateMatchResult =
-  | { ok: true; match: typeof matches.$inferSelect; winner: { id: number; elo: number; challengeRank: number | null }; loser: { id: number; elo: number; challengeRank: number | null } }
+  | { ok: true; match: typeof matches.$inferSelect; winner: { id: number; rating: number; challengeRank: number | null }; loser: { id: number; rating: number; challengeRank: number | null } }
   | { ok: false; status: number; error: string };
 
 /**
- * Creates a match: validates inputs, computes ELO change, inserts the match row,
- * updates player ELOs, and (for challenge matches) swaps challenge ranks if the
- * lower-ranked player won. Returns enough info to build the API response.
+ * Creates a match: validates inputs, computes Glicko-2 rating updates, inserts
+ * the match row (with pre-match rating snapshots for undo), updates players,
+ * and (for challenge matches) swaps challenge ranks if the lower-ranked player
+ * won. Returns enough info to build the API response.
  */
 export async function createMatch(
   input: CreateMatchInput,
@@ -96,24 +98,24 @@ export async function createMatch(
     }
   }
 
-  // Validate games array if provided
-  let validatedGames: { winnerScore: number; loserScore: number }[] | null = null;
+  // Validate games array if provided. Each game is either scored (both
+  // point values present) or scoreless (both null + who won the game).
+  let validatedGames: GameScore[] | null = null;
   let seriesWinnerScore: number | null = winnerScore ?? null;
   let seriesLoserScore: number | null = loserScore ?? null;
 
   if (Array.isArray(games) && games.length > 0) {
     for (const g of games) {
-      if (
-        typeof g.winnerScore !== 'number' ||
-        typeof g.loserScore !== 'number' ||
-        g.winnerScore < 0 ||
-        g.loserScore < 0
-      ) {
+      const scoreless =
+        g.winnerScore == null &&
+        g.loserScore == null &&
+        typeof g.wonByMatchWinner === 'boolean';
+      if (scoreless) continue;
+      if (!isScoredGame(g) || g.winnerScore < 0 || g.loserScore < 0) {
         return { ok: false, status: 400, error: 'Invalid game scores' };
       }
     }
-    const gamesWonByWinner = games.filter((g) => g.winnerScore > g.loserScore)
-      .length;
+    const gamesWonByWinner = games.filter(gameWonByMatchWinner).length;
     const gamesWonByLoser = games.length - gamesWonByWinner;
     if (gamesWonByWinner <= gamesWonByLoser) {
       return { ok: false, status: 400, error: 'Winner must have won more games' };
@@ -123,73 +125,95 @@ export async function createMatch(
     seriesLoserScore = gamesWonByLoser;
   }
 
-  const { winnerChange, loserChange } = calculateEloChange(
-    winner.elo,
-    loser.elo,
+  // Inflate each player's RD for time spent idle, then rate the match against
+  // the inflated states. Snapshots store the *raw* pre-match row values so
+  // undo restores them exactly (the idle inflation re-applies naturally on
+  // their next match).
+  const now = new Date();
+  const winnerPre = inflateRd(
+    { rating: winner.rating, rd: winner.rd, volatility: winner.volatility },
+    daysBetween(winner.lastMatchAt, now),
   );
+  const loserPre = inflateRd(
+    { rating: loser.rating, rd: loser.rd, volatility: loser.volatility },
+    daysBetween(loser.lastMatchAt, now),
+  );
+  const rated = rateMatch(winnerPre, loserPre);
 
-  const [match] = await db
-    .insert(matches)
-    .values({
-      winnerId,
-      loserId,
-      winnerScore: seriesWinnerScore,
-      loserScore: seriesLoserScore,
-      winnerEloChange: winnerChange,
-      loserEloChange: loserChange,
-      isChallenge: !!isChallenge,
-      games: validatedGames,
-      winnerRankBefore: winner.challengeRank,
-      loserRankBefore: loser.challengeRank,
-      tournamentMatchId: tournamentMatchId ?? null,
-    })
-    .returning();
-
-  await Promise.all([
-    db
-      .update(players)
-      .set({ elo: winner.elo + winnerChange })
-      .where(eq(players.id, winnerId)),
-    db
-      .update(players)
-      .set({ elo: loser.elo + loserChange })
-      .where(eq(players.id, loserId)),
-  ]);
-
-  // Challenge rank swap if the lower-ranked player won
-  let updatedWinnerRank = winner.challengeRank;
-  let updatedLoserRank = loser.challengeRank;
-  if (
-    isChallenge &&
+  // All writes (match insert, both rating updates, rank swap) commit or roll
+  // back together. Queries inside a transaction share one connection, so they
+  // run sequentially.
+  const swapRanks =
+    !!isChallenge &&
     winner.challengeRank != null &&
     loser.challengeRank != null &&
-    winner.challengeRank > loser.challengeRank
-  ) {
-    await Promise.all([
-      db
-        .update(players)
-        .set({ challengeRank: loser.challengeRank })
-        .where(eq(players.id, winner.id)),
-      db
-        .update(players)
-        .set({ challengeRank: winner.challengeRank })
-        .where(eq(players.id, loser.id)),
-    ]);
-    updatedWinnerRank = loser.challengeRank;
-    updatedLoserRank = winner.challengeRank;
-  }
+    winner.challengeRank > loser.challengeRank;
+
+  const match = await db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(matches)
+      .values({
+        winnerId,
+        loserId,
+        winnerScore: seriesWinnerScore,
+        loserScore: seriesLoserScore,
+        winnerRatingChange: rated.winner.rating - winner.rating,
+        loserRatingChange: rated.loser.rating - loser.rating,
+        winnerRatingBefore: winner.rating,
+        winnerRdBefore: winner.rd,
+        winnerVolBefore: winner.volatility,
+        winnerLastMatchBefore: winner.lastMatchAt,
+        loserRatingBefore: loser.rating,
+        loserRdBefore: loser.rd,
+        loserVolBefore: loser.volatility,
+        loserLastMatchBefore: loser.lastMatchAt,
+        isChallenge: !!isChallenge,
+        games: validatedGames,
+        winnerRankBefore: winner.challengeRank,
+        loserRankBefore: loser.challengeRank,
+        tournamentMatchId: tournamentMatchId ?? null,
+        createdAt: now,
+      })
+      .returning();
+
+    await tx
+      .update(players)
+      .set({
+        rating: rated.winner.rating,
+        rd: rated.winner.rd,
+        volatility: rated.winner.volatility,
+        lastMatchAt: now,
+        ...(swapRanks ? { challengeRank: loser.challengeRank } : {}),
+      })
+      .where(eq(players.id, winnerId));
+    await tx
+      .update(players)
+      .set({
+        rating: rated.loser.rating,
+        rd: rated.loser.rd,
+        volatility: rated.loser.volatility,
+        lastMatchAt: now,
+        ...(swapRanks ? { challengeRank: winner.challengeRank } : {}),
+      })
+      .where(eq(players.id, loserId));
+
+    return inserted;
+  });
+
+  const updatedWinnerRank = swapRanks ? loser.challengeRank : winner.challengeRank;
+  const updatedLoserRank = swapRanks ? winner.challengeRank : loser.challengeRank;
 
   return {
     ok: true,
     match,
     winner: {
       id: winner.id,
-      elo: winner.elo + winnerChange,
+      rating: rated.winner.rating,
       challengeRank: updatedWinnerRank,
     },
     loser: {
       id: loser.id,
-      elo: loser.elo + loserChange,
+      rating: rated.loser.rating,
       challengeRank: updatedLoserRank,
     },
   };

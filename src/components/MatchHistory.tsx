@@ -2,8 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { isUpset } from '../../lib/elo';
+import { isUpset } from '../../lib/glicko';
+import { hasPointScores } from '../../lib/games';
 import type { Match, Player } from '../types';
+import LogMatchModal from './LogMatchModal';
 
 const PAGE_SIZE = 25;
 
@@ -57,8 +59,30 @@ export default function MatchHistory() {
     setPage(0);
   }, [filter1, filter2]);
 
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [showLogMatch, setShowLogMatch] = useState(false);
+
+  const handleDelete = async (match: Match) => {
+    if (
+      !confirm(
+        `Delete ${match.winner?.name ?? 'winner'} def. ${match.loser?.name ?? 'loser'}? ` +
+          'All ratings will be recomputed from the remaining history. Ladder positions are not changed.',
+      )
+    )
+      return;
+    setDeletingId(match.id);
+    try {
+      await api.matches.delete(match.id);
+      fetchMatches();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete match');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const handleUndo = async () => {
-    if (!confirm('Undo the most recent match? This will revert ELO and ladder changes.')) return;
+    if (!confirm('Undo the most recent match? This will revert rating and ladder changes.')) return;
     setUndoing(true);
     try {
       await api.matches.deleteLast();
@@ -89,7 +113,16 @@ export default function MatchHistory() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Match History</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Match History</h1>
+        <button
+          onClick={() => setShowLogMatch(true)}
+          disabled={players.length < 2}
+          className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg font-medium transition-colors"
+        >
+          Log Match
+        </button>
+      </div>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="flex-1">
@@ -148,7 +181,7 @@ export default function MatchHistory() {
         <div className="space-y-2">
           {matches.map((match, index) => (
             <div key={match.id} className="flex items-center gap-2">
-              <div className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3">
+              <div className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 group">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <Link
@@ -164,12 +197,12 @@ export default function MatchHistory() {
                     >
                       {match.loser?.name ?? `Player ${match.loserId}`}
                     </Link>
-                    {match.games && match.games.length > 0 ? (
+                    {match.games && match.games.length > 0 && hasPointScores(match.games) ? (
                       <span className="text-slate-400 text-sm shrink-0">
                         {match.winnerScore}-{match.loserScore}
                         {' '}
                         <span className="text-slate-500">
-                          ({match.games.map(g => `${g.winnerScore}-${g.loserScore}`).join(', ')})
+                          ({match.games.map(g => g.winnerScore != null ? `${g.winnerScore}-${g.loserScore}` : '\u2013').join(', ')})
                         </span>
                       </span>
                     ) : match.winnerScore != null && match.loserScore != null ? (
@@ -195,15 +228,25 @@ export default function MatchHistory() {
                       </span>
                     )}
                     <span className="text-emerald-400 tabular-nums">
-                      +{match.winnerEloChange}
+                      +{Math.round(match.winnerRatingChange)}
                     </span>
                     <span className="text-red-400 tabular-nums">
-                      {match.loserEloChange}
+                      {Math.round(match.loserRatingChange)}
                     </span>
                     {isAdmin && (
                       <span className="text-slate-500 text-xs w-28 text-right">
                         {formatDate(match.createdAt)}
                       </span>
+                    )}
+                    {isAdmin && match.tournamentMatchId == null && (
+                      <button
+                        onClick={() => handleDelete(match)}
+                        disabled={deletingId === match.id}
+                        title="Delete match and recompute ratings"
+                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-slate-600 hover:text-red-400 text-sm w-4 disabled:opacity-50"
+                      >
+                        {deletingId === match.id ? '\u2026' : '\u00d7'}
+                      </button>
                     )}
                   </div>
                 </div>
@@ -220,6 +263,17 @@ export default function MatchHistory() {
             </div>
           ))}
         </div>
+      )}
+
+      {showLogMatch && (
+        <LogMatchModal
+          players={players}
+          onClose={() => setShowLogMatch(false)}
+          onLogged={() => {
+            setShowLogMatch(false);
+            fetchMatches();
+          }}
+        />
       )}
 
       {total > PAGE_SIZE && (

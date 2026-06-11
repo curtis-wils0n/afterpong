@@ -1,6 +1,6 @@
 # pong-elo
 
-ELO leaderboard, tournaments, and stats tracker for office ping pong.
+Glicko-2 rating leaderboard, tournaments, and stats tracker for office ping pong.
 
 ## Prerequisites
 

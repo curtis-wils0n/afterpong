@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 import { api } from '../lib/api';
 import Tooltip from './Tooltip';
+import { niceAxis } from '../lib/chart';
 import type {
   StatsResponse,
   PlayerRef,
@@ -115,30 +116,43 @@ function NoData({ label, tooltip }: { label: string; tooltip?: string }) {
 }
 
 const TIPS = {
-  peakElo: 'Highest ELO anyone has ever reached',
-  currentTopElo: 'Highest ELO of any active player right now',
+  peakRating: 'Highest skill rating anyone has reached (placement games excluded)',
+  currentTopRating: 'Highest skill rating of any active player right now',
   biggestClimber:
-    'Largest gap between a player’s lowest ever ELO and their current ELO',
+    'Largest gap between a player’s lowest rating and their current rating, once established (placement games excluded)',
   biggestFaller:
-    'Largest gap between a player’s peak ELO and their current ELO',
+    'Largest gap between a player’s peak rating and their current rating, once established (placement games excluded)',
   biggestDailyClimber:
-    'Largest net ELO gained by any player on a single day',
+    'Largest net rating gained by any player on a single day (placement games excluded)',
   biggestDailyFaller:
-    'Largest net ELO lost by any player on a single day',
+    'Largest net rating lost by any player on a single day (placement games excluded)',
   currentWinStreak: 'Longest active streak of consecutive wins',
   longestWinStreak: 'Longest streak of consecutive wins ever recorded',
   currentLossStreak: 'Longest active streak of consecutive losses',
   longestLossStreak: 'Longest streak of consecutive losses ever recorded',
   biggestUpset:
-    'Single match where the winner gained the most ELO from one win',
+    'Single match where the winner had the lowest pre-match win probability',
   mostUpsetsCaused:
-    'Career count of wins where the player was the underdog (gained more than 20 ELO)',
+    'Career count of wins where the player was the underdog (under 37.5% to win going in)',
   highestWinRate:
     'Highest win percentage among players with at least 10 matches',
   mostSuccessfulClimbs:
     'Career count of challenge matches won as the lower-ranked challenger',
   bestDefender:
     'Career count of challenge matches won as the higher-ranked defender',
+  giantSlayer:
+    'Career wins above expectation: how many more matches a player has won than the ratings predicted (min 10 rated games)',
+  mostImprobableStreak:
+    'Win streak (3+) with the lowest combined probability — every win\u2019s pre-match odds multiplied together',
+  upsetMagnet: 'Most losses suffered as the clear favorite (the mirror of Most Upsets Caused)',
+  hardestSchedule:
+    'Lowest average pre-match win probability — who consistently plays up (min 10 rated games)',
+  chaosAgent:
+    'Player whose results the rating model predicts worst — average surprise per game (min 10 rated games)',
+  clutchRecord:
+    'Best record in deciding games of a best-of series, e.g. game 3 at 1-1 (min 5 deciders)',
+  comebackArtist: 'Most series wins after losing the first game',
+  bagels: 'Most 11-0 shutout games dealt (games logged without point scores don\u2019t count)',
   biggestRivalry: 'Pair of players with the most total matches between them',
   dominator:
     'Largest gap between wins and losses in any head-to-head matchup',
@@ -147,7 +161,7 @@ const TIPS = {
   mostFriendly:
     'Player most often shown as the FRIEND badge on others’ profiles (most games together)',
   biggestVillain:
-    'Player most often shown as the NEMESIS badge on others’ profiles (drained the most ELO)',
+    'Player most often shown as the NEMESIS badge on others’ profiles (drained the most rating)',
   biggestOp:
     'Player most often shown as the RIVAL badge on others’ profiles (closest matchup)',
 };
@@ -170,11 +184,14 @@ function formatDateShort(iso: string) {
 function StreakMatchList({
   matches,
   isWin,
+  showOdds = false,
 }: {
   matches: StreakMatch[];
   isWin: boolean;
+  showOdds?: boolean;
 }) {
-  const scoreClass = isWin ? 'text-emerald-400' : 'text-red-400';
+  const scoreClass = (m: StreakMatch) =>
+    (m.won ?? isWin) ? 'text-emerald-400' : 'text-red-400';
   return (
     <div className="flex flex-col gap-1">
       {matches.map((m, i) => (
@@ -183,8 +200,13 @@ function StreakMatchList({
           <span className="text-slate-300 truncate">{m.opponent.name}</span>
           <span className="ml-auto flex items-center gap-2">
             {m.playerScore != null && m.opponentScore != null && (
-              <span className={`tabular-nums ${scoreClass}`}>
+              <span className={`tabular-nums ${scoreClass(m)}`}>
                 {m.playerScore}-{m.opponentScore}
+              </span>
+            )}
+            {showOdds && m.winProb != null && (
+              <span className="text-yellow-400/80 tabular-nums">
+                {Math.round(m.winProb * 100)}%
               </span>
             )}
             <span className="text-slate-600 tabular-nums">
@@ -210,6 +232,47 @@ function streakTooltipContent(entries: StreakEntry[], isWin: boolean) {
         </div>
       ))}
     </div>
+  );
+}
+
+function detailTooltipContent(
+  entries: { player: PlayerRef; matches: StreakMatch[] }[],
+  showOdds: boolean,
+) {
+  if (entries.length === 1) {
+    return (
+      <StreakMatchList matches={entries[0].matches} isWin showOdds={showOdds} />
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {entries.map((e) => (
+        <div key={e.player.id}>
+          <div className="text-slate-200 font-medium mb-1">{e.player.name}</div>
+          <StreakMatchList matches={e.matches} isWin showOdds={showOdds} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DetailValue({
+  entries,
+  showOdds,
+  children,
+}: {
+  entries: { player: PlayerRef; matches: StreakMatch[] }[];
+  showOdds?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip
+      align="left"
+      widthClass="w-72"
+      content={detailTooltipContent(entries, showOdds ?? false)}
+    >
+      <span className="cursor-help">{children}</span>
+    </Tooltip>
   );
 }
 
@@ -305,10 +368,10 @@ function formatDayLabel(dayKey: string) {
   });
 }
 
-function EloHistoryChart({
+function RatingHistoryChart({
   players,
 }: {
-  players: StatsResponse['eloHistory']['players'];
+  players: StatsResponse['ratingHistory']['players'];
 }) {
   const [windowKey, setWindowKey] = useState<WindowKey>('all');
   const [hoveredId, setHoveredId] = useState<number | null>(null);
@@ -318,7 +381,7 @@ function EloHistoryChart({
   // (drop the synthetic createdAt point — it's not a game day). Days with
   // no games never enter the data, so the X axis collapses dead stretches.
   // For windowed views, also anchor each player at the window start with
-  // their pre-window ELO so lines span the full timeframe instead of
+  // their pre-window rating so lines span the full timeframe instead of
   // starting at the first in-window match.
   const series = useMemo(() => {
     const opt = WINDOW_OPTIONS.find((o) => o.key === windowKey)!;
@@ -327,27 +390,27 @@ function EloHistoryChart({
       opt.days != null ? now - opt.days * 24 * 60 * 60 * 1000 : null;
 
     return players.map((p) => {
-      // p.points[0] is the synthetic { createdAt, 1000 } from the API.
+      // p.points[0] is the synthetic { createdAt, 1500 } from the API.
       const matchPts = p.points.slice(1);
-      const byDay = new Map<string, { day: string; t: number; elo: number }>();
-      let preWindowElo: number | null = null;
+      const byDay = new Map<string, { day: string; t: number; rating: number }>();
+      let preWindowRating: number | null = null;
       for (const pt of matchPts) {
         const t = new Date(pt.t).getTime();
         if (windowStart != null && t < windowStart) {
-          preWindowElo = pt.elo;
+          preWindowRating = pt.rating;
           continue;
         }
         const day = localDayKey(t);
         const prev = byDay.get(day);
-        if (!prev || prev.t <= t) byDay.set(day, { day, t, elo: pt.elo });
+        if (!prev || prev.t <= t) byDay.set(day, { day, t, rating: pt.rating });
       }
-      if (windowStart != null && preWindowElo != null) {
+      if (windowStart != null && preWindowRating != null) {
         const anchorDay = localDayKey(windowStart);
         if (!byDay.has(anchorDay)) {
           byDay.set(anchorDay, {
             day: anchorDay,
             t: windowStart,
-            elo: preWindowElo,
+            rating: preWindowRating,
           });
         }
       }
@@ -379,7 +442,7 @@ function EloHistoryChart({
       const row: Record<string, number | string | null> = { idx, day };
       visibleSeries.forEach((s, i) => {
         while (cursors[i] < s.data.length && s.data[cursors[i]].day <= day) {
-          last[i] = s.data[cursors[i]].elo;
+          last[i] = s.data[cursors[i]].rating;
           cursors[i]++;
         }
         row[`p${s.id}`] = last[i];
@@ -388,11 +451,11 @@ function EloHistoryChart({
     });
   }, [visibleSeries, dayKeys]);
 
-  const yDomain = useMemo(() => {
-    const elos: number[] = [];
-    for (const s of visibleSeries) for (const pt of s.data) elos.push(pt.elo);
-    if (elos.length === 0) return [980, 1020] as [number, number];
-    return [Math.min(...elos) - 20, Math.max(...elos) + 20] as [number, number];
+  const yAxis = useMemo(() => {
+    const ratingVals: number[] = [];
+    for (const s of visibleSeries) for (const pt of s.data) ratingVals.push(pt.rating);
+    if (ratingVals.length === 0) return niceAxis(1480, 1520);
+    return niceAxis(Math.min(...ratingVals), Math.max(...ratingVals));
   }, [visibleSeries]);
 
   // Colors are stable per legend slot regardless of which lines are hidden.
@@ -415,7 +478,7 @@ function EloHistoryChart({
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-6 h-[520px] flex flex-col">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm text-slate-400">ELO over time</h3>
+        <h3 className="text-sm text-slate-400">Skill over time</h3>
         <div className="flex gap-1">
           {WINDOW_OPTIONS.map((opt) => (
             <button
@@ -459,7 +522,8 @@ function EloHistoryChart({
                   tickLine={false}
                 />
                 <YAxis
-                  domain={yDomain}
+                  domain={yAxis.domain}
+                  ticks={yAxis.ticks}
                   tick={{ fill: '#64748b', fontSize: 12 }}
                   width={48}
                   axisLine={false}
@@ -600,21 +664,21 @@ export default function Stats() {
     <div>
       <h1 className="text-2xl font-bold mb-6">Stats</h1>
 
-      <EloHistoryChart players={stats.eloHistory.players} />
+      <RatingHistoryChart players={stats.ratingHistory.players} />
 
       {/* Players */}
       <h2 className="text-lg font-semibold mb-3">Players</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        {stats.players.peakElo ? (
+        {stats.players.peakRating ? (
           <StatCard
-            label="All-Time Peak ELO"
-            value={String(stats.players.peakElo.elo)}
-            tooltip={TIPS.peakElo}
+            label="All-Time Peak Rating"
+            value={String(stats.players.peakRating.rating)}
+            tooltip={TIPS.peakRating}
           >
-            <PlayerLinks players={stats.players.peakElo.players} />
+            <PlayerLinks players={stats.players.peakRating.players} />
           </StatCard>
         ) : (
-          <NoData label="All-Time Peak ELO" tooltip={TIPS.peakElo} />
+          <NoData label="All-Time Peak Rating" tooltip={TIPS.peakRating} />
         )}
 
         {stats.players.biggestClimber ? (
@@ -659,16 +723,16 @@ export default function Stats() {
           <NoData label="Biggest Fall" tooltip={TIPS.biggestFaller} />
         )}
 
-        {stats.players.currentTopElo ? (
+        {stats.players.currentTopRating ? (
           <StatCard
-            label="Current Top ELO"
-            value={String(stats.players.currentTopElo.elo)}
-            tooltip={TIPS.currentTopElo}
+            label="Current Top Rating"
+            value={String(stats.players.currentTopRating.rating)}
+            tooltip={TIPS.currentTopRating}
           >
-            <PlayerLinks players={stats.players.currentTopElo.players} />
+            <PlayerLinks players={stats.players.currentTopRating.players} />
           </StatCard>
         ) : (
-          <NoData label="Current Top ELO" tooltip={TIPS.currentTopElo} />
+          <NoData label="Current Top Rating" tooltip={TIPS.currentTopRating} />
         )}
 
         {stats.players.biggestDailyClimber ? (
@@ -798,7 +862,7 @@ export default function Stats() {
         {stats.matches.biggestUpset ? (
           <StatCard
             label="Biggest Upset"
-            value={`+${stats.matches.biggestUpset.eloGain}`}
+            value={`${Math.round(stats.matches.biggestUpset.winnerOdds * 100)}% odds`}
             valueClass="text-yellow-400"
             tooltip={TIPS.biggestUpset}
           >
@@ -850,6 +914,216 @@ export default function Stats() {
           </StatCard>
         ) : (
           <NoData label="Highest Win Rate" tooltip={TIPS.highestWinRate} />
+        )}
+      </div>
+
+      {/* Probability */}
+      <h2 className="text-lg font-semibold mb-3">Against the Odds</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {stats.probability.giantSlayer ? (
+          <StatCard
+            label="Giant Slayer"
+            value={
+              <DetailValue entries={stats.probability.giantSlayer.entries} showOdds>
+                +{stats.probability.giantSlayer.wae} wins
+              </DetailValue>
+            }
+            valueClass="text-yellow-400"
+            tooltip={TIPS.giantSlayer}
+          >
+            {stats.probability.giantSlayer.entries.map((e) => (
+              <div key={e.player.id}>
+                <PlayerLink player={e.player} />
+                <span className="text-slate-600">
+                  {' '}
+                  · +{e.wae} over {e.games} games
+                </span>
+              </div>
+            ))}
+          </StatCard>
+        ) : (
+          <NoData label="Giant Slayer" tooltip={TIPS.giantSlayer} />
+        )}
+
+        {stats.probability.mostImprobableStreak ? (
+          <StatCard
+            label="Most Improbable Streak"
+            value={
+              <Tooltip
+                align="left"
+                widthClass="w-72"
+                content={
+                  <StreakMatchList
+                    matches={stats.probability.mostImprobableStreak.matches}
+                    isWin
+                    showOdds
+                  />
+                }
+              >
+                <span className="cursor-help">
+                  1 in {Math.round(1 / stats.probability.mostImprobableStreak.probability).toLocaleString()}
+                </span>
+              </Tooltip>
+            }
+            valueClass="text-yellow-400"
+            tooltip={TIPS.mostImprobableStreak}
+          >
+            <div>
+              <PlayerLink player={stats.probability.mostImprobableStreak.player} />
+              <span className="text-slate-600">
+                {' '}
+                · {stats.probability.mostImprobableStreak.count} straight ·{' '}
+                {formatDate(stats.probability.mostImprobableStreak.startDate)} –{' '}
+                {formatDate(stats.probability.mostImprobableStreak.endDate)}
+              </span>
+            </div>
+          </StatCard>
+        ) : (
+          <NoData label="Most Improbable Streak" tooltip={TIPS.mostImprobableStreak} />
+        )}
+
+        {stats.probability.upsetMagnet ? (
+          <StatCard
+            label="Upset Magnet"
+            value={
+              <DetailValue entries={stats.probability.upsetMagnet.entries} showOdds>
+                {stats.probability.upsetMagnet.count}
+              </DetailValue>
+            }
+            valueClass="text-red-400"
+            tooltip={TIPS.upsetMagnet}
+          >
+            <PlayerLinks players={stats.probability.upsetMagnet.entries.map((e) => e.player)} />
+          </StatCard>
+        ) : (
+          <NoData label="Upset Magnet" tooltip={TIPS.upsetMagnet} />
+        )}
+
+        {stats.probability.hardestSchedule ? (
+          <StatCard
+            label="Hardest Schedule"
+            value={
+              <Tooltip
+                align="left"
+                widthClass="w-72"
+                content={
+                  <div className="flex flex-col gap-1">
+                    {stats.probability.hardestSchedule.entries[0].opponents.map((o) => (
+                      <div key={o.opponent.id} className="flex items-center gap-2">
+                        <span className="text-slate-600">vs</span>
+                        <span className="text-slate-300 truncate">{o.opponent.name}</span>
+                        <span className="ml-auto flex items-center gap-2">
+                          <span className="text-slate-400 tabular-nums">×{o.games}</span>
+                          <span className="text-yellow-400/80 tabular-nums">
+                            {Math.round(o.avgWinProb * 100)}%
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                }
+              >
+                <span className="cursor-help">
+                  {Math.round(stats.probability.hardestSchedule.avgWinProb * 100)}% avg odds
+                </span>
+              </Tooltip>
+            }
+            tooltip={TIPS.hardestSchedule}
+          >
+            {stats.probability.hardestSchedule.entries.map((e) => (
+              <div key={e.player.id}>
+                <PlayerLink player={e.player} />
+                <span className="text-slate-600"> · {e.games} games</span>
+              </div>
+            ))}
+          </StatCard>
+        ) : (
+          <NoData label="Hardest Schedule" tooltip={TIPS.hardestSchedule} />
+        )}
+
+        {stats.probability.chaosAgent ? (
+          <StatCard
+            label="Chaos Agent"
+            value={
+              <DetailValue entries={stats.probability.chaosAgent.entries} showOdds>
+                {stats.probability.chaosAgent.brier.toFixed(2)}
+              </DetailValue>
+            }
+            valueClass="text-purple-400"
+            tooltip={TIPS.chaosAgent}
+          >
+            {stats.probability.chaosAgent.entries.map((e) => (
+              <div key={e.player.id}>
+                <PlayerLink player={e.player} />
+                <span className="text-slate-600"> · {e.games} games</span>
+              </div>
+            ))}
+          </StatCard>
+        ) : (
+          <NoData label="Chaos Agent" tooltip={TIPS.chaosAgent} />
+        )}
+      </div>
+
+      {/* Clutch */}
+      <h2 className="text-lg font-semibold mb-3">Clutch</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {stats.clutch.clutchRecord ? (
+          <StatCard
+            label="Clutch Rating"
+            value={
+              <DetailValue entries={stats.clutch.clutchRecord.entries}>
+                {Math.round(stats.clutch.clutchRecord.rate * 100)}%
+              </DetailValue>
+            }
+            valueClass="text-emerald-400"
+            tooltip={TIPS.clutchRecord}
+          >
+            {stats.clutch.clutchRecord.entries.map((e) => (
+              <div key={e.player.id}>
+                <PlayerLink player={e.player} />
+                <span className="text-slate-600">
+                  {' '}
+                  · {e.wins}-{e.losses} in deciders
+                </span>
+              </div>
+            ))}
+          </StatCard>
+        ) : (
+          <NoData label="Clutch Rating" tooltip={TIPS.clutchRecord} />
+        )}
+
+        {stats.clutch.comebackArtist ? (
+          <StatCard
+            label="Comeback Artist"
+            value={
+              <DetailValue entries={stats.clutch.comebackArtist.entries}>
+                {stats.clutch.comebackArtist.count}
+              </DetailValue>
+            }
+            valueClass="text-emerald-400"
+            tooltip={TIPS.comebackArtist}
+          >
+            <PlayerLinks players={stats.clutch.comebackArtist.entries.map((e) => e.player)} />
+          </StatCard>
+        ) : (
+          <NoData label="Comeback Artist" tooltip={TIPS.comebackArtist} />
+        )}
+
+        {stats.clutch.bagels ? (
+          <StatCard
+            label="Bagels Dealt"
+            value={
+              <DetailValue entries={stats.clutch.bagels.entries}>
+                {stats.clutch.bagels.count}
+              </DetailValue>
+            }
+            valueClass="text-amber-400"
+            tooltip={TIPS.bagels}
+          >
+            <PlayerLinks players={stats.clutch.bagels.entries.map((e) => e.player)} />
+          </StatCard>
+        ) : (
+          <NoData label="Bagels Dealt" tooltip={TIPS.bagels} />
         )}
       </div>
 
@@ -1011,9 +1285,9 @@ export default function Stats() {
                       tooltip={(s) => (
                         <>
                           <span className="font-mono tabular-nums text-red-400">
-                            -{s.eloDrained}
+                            -{s.ratingDrained}
                           </span>{' '}
-                          ELO
+                          rating
                         </>
                       )}
                     />

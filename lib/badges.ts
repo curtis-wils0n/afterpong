@@ -10,11 +10,11 @@ export interface H2HEntry {
 export interface BadgeMatch {
   winnerId: number;
   loserId: number;
-  winnerEloChange: number;
-  loserEloChange: number;
+  winnerRatingChange: number;
+  loserRatingChange: number;
 }
 
-// Nemesis: opponent who has taken the most ELO from you (most negative net).
+// Nemesis: opponent who has taken the most rating from you (most negative net).
 // Returns null if no opponent has a negative net against you.
 export function computeNemesis(
   playerId: number,
@@ -31,7 +31,7 @@ export function computeNemesis(
       )
       .reduce(
         (sum, m) =>
-          sum + (m.winnerId === playerId ? m.winnerEloChange : m.loserEloChange),
+          sum + (m.winnerId === playerId ? m.winnerRatingChange : m.loserRatingChange),
         0,
       );
     if (net < worstNet) {

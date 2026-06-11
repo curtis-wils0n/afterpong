@@ -1,9 +1,13 @@
-import { pgTable, serial, varchar, integer, timestamp, boolean, jsonb, pgEnum } from 'drizzle-orm/pg-core';
+import { pgTable, serial, varchar, integer, doublePrecision, timestamp, boolean, jsonb, pgEnum } from 'drizzle-orm/pg-core';
+import type { GameScore } from '../lib/games.js';
 
 export const players = pgTable('players', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 100 }).notNull().unique(),
-  elo: integer('elo').notNull().default(1000),
+  rating: doublePrecision('rating').notNull().default(1500),
+  rd: doublePrecision('rd').notNull().default(350),
+  volatility: doublePrecision('volatility').notNull().default(0.06),
+  lastMatchAt: timestamp('last_match_at'),
   challengeRank: integer('challenge_rank'),
   onVacation: boolean('on_vacation').notNull().default(false),
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -15,10 +19,20 @@ export const matches = pgTable('matches', {
   loserId: integer('loser_id').references(() => players.id).notNull(),
   winnerScore: integer('winner_score'),
   loserScore: integer('loser_score'),
-  winnerEloChange: integer('winner_elo_change').notNull(),
-  loserEloChange: integer('loser_elo_change').notNull(),
+  winnerRatingChange: doublePrecision('winner_rating_change').notNull().default(0),
+  loserRatingChange: doublePrecision('loser_rating_change').notNull().default(0),
+  // Pre-match snapshots of both players' raw rating state (and last-match
+  // time), so undo can restore the exact prior row without replaying history.
+  winnerRatingBefore: doublePrecision('winner_rating_before'),
+  winnerRdBefore: doublePrecision('winner_rd_before'),
+  winnerVolBefore: doublePrecision('winner_vol_before'),
+  winnerLastMatchBefore: timestamp('winner_last_match_before'),
+  loserRatingBefore: doublePrecision('loser_rating_before'),
+  loserRdBefore: doublePrecision('loser_rd_before'),
+  loserVolBefore: doublePrecision('loser_vol_before'),
+  loserLastMatchBefore: timestamp('loser_last_match_before'),
   isChallenge: boolean('is_challenge').notNull().default(false),
-  games: jsonb('games').$type<{ winnerScore: number; loserScore: number }[]>(),
+  games: jsonb('games').$type<GameScore[]>(),
   winnerRankBefore: integer('winner_rank_before'),
   loserRankBefore: integer('loser_rank_before'),
   tournamentMatchId: integer('tournament_match_id'),

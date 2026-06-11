@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import { conservativeRating } from '../../lib/glicko';
 import type { Player } from '../types';
 import LogMatchModal from './LogMatchModal';
 
@@ -216,7 +217,7 @@ export default function ChallengeBoard() {
                     }
                   </div>
                   <span className="text-sm text-slate-500 tabular-nums w-20 text-right shrink-0">
-                    {player.elo} ELO
+                    {Math.round(conservativeRating(player))}
                   </span>
                 </div>
                 <div className="w-24 shrink-0 flex justify-end">

@@ -9,7 +9,7 @@ const toc: TocEntry[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'getting-started', label: 'Getting started' },
   { id: 'pages', label: 'Tour of the pages' },
-  { id: 'elo', label: 'ELO ratings' },
+  { id: 'ratings', label: 'Ratings (Glicko-2)' },
   { id: 'ladder', label: 'Challenge ladder' },
   { id: 'vacation', label: 'Vacation mode' },
   { id: 'matches', label: 'Logging matches' },
@@ -81,8 +81,8 @@ export default function Docs() {
           </p>
           <ul className="list-disc pl-5 space-y-1 mt-2">
             <li>
-              <strong>ELO leaderboard</strong> — a continuous skill rating that
-              moves a little after every match.
+              <strong>Rating leaderboard</strong> — a continuous Glicko-2 skill
+              rating that updates after every match.
             </li>
             <li>
               <strong>Challenge ladder</strong> — a discrete ordering where you
@@ -90,7 +90,7 @@ export default function Docs() {
             </li>
             <li>
               <strong>Tournaments</strong> — occasional single-elimination
-              brackets seeded from current ELO.
+              brackets seeded from current ratings.
             </li>
           </ul>
           <p className="mt-2">
@@ -108,8 +108,10 @@ export default function Docs() {
             </li>
             <li>
               <strong>Add yourself</strong> on the Leaderboard page if you're
-              new. A fresh player starts at <Mono>1000 ELO</Mono> and gets
-              appended to the bottom of the challenge ladder.
+              new. A fresh player starts at a skill rating of <Mono>1500</Mono>{' '}
+              with maximum uncertainty (<Mono>±700</Mono>, so a leaderboard
+              score of <Mono>800</Mono>) and climbs quickly as they play. New
+              players also get appended to the bottom of the challenge ladder.
             </li>
             <li>
               <strong>Play a match</strong>, then click <em>Log a match</em>{' '}
@@ -130,7 +132,9 @@ export default function Docs() {
               and log a match between two adjacent players.
             </Page>
             <Page name="Leaderboard" path="/leaderboard">
-              Players ranked by ELO. Add new players here.
+              Players ranked by their conservative rating (see{' '}
+              <a className="underline" href="#ratings">Ratings</a>). Add new
+              players here.
             </Page>
             <Page name="Matches" path="/matches">
               Reverse-chronological history of every match. Filter by one or
@@ -150,7 +154,7 @@ export default function Docs() {
               The bracket, round by round. Click a slot to log that match.
             </Page>
             <Page name="Player profile" path="/players/:id">
-              Per-player stats, ELO history chart, recent form, head-to-head
+              Per-player stats, rating history chart, recent form, head-to-head
               against every opponent, and the three relationship badges.
             </Page>
             <Page name="Docs" path="/docs">
@@ -159,35 +163,69 @@ export default function Docs() {
           </dl>
         </Section>
 
-        <Section id="elo" title="ELO ratings">
+        <Section id="ratings" title="Ratings (Glicko-2)">
           <p>
-            Every player has an ELO rating, starting at <Mono>1000</Mono>.
-            Matches use the standard ELO formula with a K-factor of{' '}
-            <Mono>32</Mono>:
+            Afterpong uses <strong>Glicko-2</strong>, a Bayesian successor to
+            ELO designed for small pools and uneven play frequency. Every
+            player carries three numbers:
           </p>
-          <pre className="bg-slate-900 border border-slate-700 rounded p-3 text-xs overflow-x-auto mt-2">
-{`expected = 1 / (1 + 10^((opponentElo - playerElo) / 400))
-change   = round(K * (actual - expected))`}
-          </pre>
           <ul className="list-disc pl-5 space-y-1 mt-2">
             <li>
-              ELO is <strong>zero-sum</strong> per match: the winner's gain
-              equals the loser's loss.
+              <strong>Skill rating</strong> — best estimate of strength.
+              Starts at <Mono>1500</Mono>.
             </li>
             <li>
-              Beating someone higher-rated than you awards more points than
-              beating someone lower-rated.
+              <strong>RD (rating deviation)</strong> — how uncertain that
+              estimate is. Starts at <Mono>350</Mono>, shrinks as you play, and
+              grows back while you're idle.
             </li>
-            <li>The maximum swing for one match is <Mono>32</Mono>.</li>
             <li>
-              An <strong>upset</strong> is any win where the winner gained more
-              than <Mono>20</Mono> ELO — roughly a 100-point skill gap.
+              <strong>Volatility</strong> — how erratic your results have been.
+              Erratic players' ratings move more.
             </li>
           </ul>
           <p className="mt-2">
-            All match types (challenge, tournament, casual) change ELO the same
-            way. The only difference is the <em>side effects</em>: challenges
-            can swap ladder positions, tournament matches advance the bracket.
+            The leaderboard ranks and displays the{' '}
+            <strong>conservative rating</strong>:
+          </p>
+          <pre className="bg-slate-900 border border-slate-700 rounded p-3 text-xs overflow-x-auto mt-2">
+{`leaderboard score = skill rating − uncertainty   (uncertainty = 2 × RD)`}
+          </pre>
+          <p className="mt-2">
+            The small <Mono>±</Mono> next to a player's skill rating is that
+            uncertainty, so the subtraction is visible on the leaderboard:{' '}
+            <Mono>1983 ±200</Mono> scores <Mono>1783</Mono>. Read it as "we're
+            confident you're at least this good." A brand-new player at{' '}
+            <Mono>1500 ±700</Mono> scores 800 and starts near the bottom —
+            winning doesn't just raise their rating, it shrinks their
+            uncertainty, so the score climbs fast over the first ~10 games. No
+            more squatting mid-table on one lucky win.
+          </p>
+          <ul className="list-disc pl-5 space-y-1 mt-2">
+            <li>
+              Ratings update after <strong>every match</strong>. How much they
+              move scales with both players' uncertainty: new players move in
+              big steps, established players in small ones.
+            </li>
+            <li>
+              Glicko-2 is <strong>not zero-sum</strong> and there is no fixed
+              maximum swing — the winner's gain and loser's loss can differ.
+            </li>
+            <li>
+              <strong>Idle time grows RD.</strong> Skip a few weeks and the
+              system trusts your old rating less; on return, your rating
+              re-converges quickly to wherever you actually are.
+            </li>
+            <li>
+              An <strong>upset</strong> is any win where the winner's pre-match
+              win probability was below <Mono>37.5%</Mono>.
+            </li>
+          </ul>
+          <p className="mt-2">
+            All match types (challenge, tournament, casual) change ratings the
+            same way. The only difference is the <em>side effects</em>:
+            challenges can swap ladder positions, tournament matches advance
+            the bracket.
           </p>
         </Section>
 
@@ -207,10 +245,10 @@ change   = round(K * (actual - expected))`}
             If the lower-ranked player wins, the two players <strong>swap</strong>{' '}
             ladder positions. There is no cascade — nobody else moves. If the
             higher-ranked player wins, the ladder is unchanged. Either way, both
-            players' ELO updates as normal.
+            players' ratings update as normal.
           </Rule>
           <Rule label="Non-challenge matches">
-            Casual matches affect ELO but never the ladder. To play a match
+            Casual matches affect ratings but never the ladder. To play a match
             that <em>could</em> swap ladder positions, the logger has to
             explicitly tick the <em>challenge</em> box.
           </Rule>
@@ -237,9 +275,11 @@ change   = round(K * (actual - expected))`}
             </li>
           </ul>
           <p className="mt-2">
-            Toggling vacation off restores normal eligibility immediately. ELO
-            does not drift during vacation — they pick up exactly where they
-            left off.
+            Toggling vacation off restores normal eligibility immediately. The
+            skill rating itself doesn't drift during vacation, but RD grows
+            with idle time — so a returning player's leaderboard score is a
+            little lower, and their first matches back move their rating
+            faster while the system re-confirms where they stand.
           </p>
         </Section>
 
@@ -255,6 +295,12 @@ change   = round(K * (actual - expected))`}
               derived from the games you enter, not stored separately.
             </li>
             <li>
+              <strong>Points optional</strong>. Toggle <em>Points: off</em> to
+              log a multi-game match without point scores — just tap who won
+              each game. The series score still counts for stats; only
+              point-based stats (like Bagels) skip these games.
+            </li>
+            <li>
               <strong>Challenge flag</strong>. Only set this if both players
               are on the ladder within range. The API rejects invalid
               challenges.
@@ -263,8 +309,8 @@ change   = round(K * (actual - expected))`}
           <p className="mt-2">
             <strong>Validation:</strong> the winner must have won strictly more
             games than the loser, all scores must be non-negative, and the two
-            players must be different. ELO updates and any ladder swap happen
-            atomically with the match insert.
+            players must be different. Rating updates and any ladder swap
+            happen atomically with the match insert.
           </p>
         </Section>
 
@@ -274,7 +320,11 @@ change   = round(K * (actual - expected))`}
             undo:
           </p>
           <ul className="list-disc pl-5 space-y-1 mt-2">
-            <li>Reverts both players' ELO by the stored deltas.</li>
+            <li>
+              Restores both players' exact pre-match rating state (skill
+              rating, RD, volatility, and last-played time) from the stored
+              snapshots.
+            </li>
             <li>Reverts the ladder swap, if one happened.</li>
             <li>
               For tournament matches, clears the played-match link and pulls
@@ -288,9 +338,9 @@ change   = round(K * (actual - expected))`}
             undo the later match first. This keeps the bracket consistent.
           </p>
           <p className="mt-2 text-slate-400">
-            Note: every match stores <Mono>winnerRankBefore</Mono> and{' '}
-            <Mono>loserRankBefore</Mono>, so undo doesn't have to replay history
-            — it just reads the snapshot.
+            Note: every match stores pre-match snapshots (ladder ranks and the
+            full rating state of both players), so undo doesn't have to replay
+            history — it just reads the snapshot.
           </p>
         </Section>
 
@@ -301,9 +351,10 @@ change   = round(K * (actual - expected))`}
             in them.
           </p>
           <Rule label="Seeding">
-            <strong>Snake</strong> seeds by ELO descending (highest ELO is
-            seed 1, lowest is seed N). <strong>Random</strong> shuffles
-            participants. The bracket itself uses standard 1-vs-N placement.
+            <strong>Snake</strong> seeds by leaderboard rating descending
+            (highest is seed 1, lowest is seed N). <strong>Random</strong>{' '}
+            shuffles participants. The bracket itself uses standard 1-vs-N
+            placement.
           </Rule>
           <Rule label="Byes">
             If the participant count isn't a power of two, the bracket is
@@ -314,8 +365,8 @@ change   = round(K * (actual - expected))`}
           <Rule label="Playing">
             From the bracket page, click any slot whose two players are known
             and log the result. The winner is automatically slotted into the
-            next round. Tournament matches still count toward ELO and global
-            stats.
+            next round. Tournament matches still count toward ratings and
+            global stats.
           </Rule>
           <Rule label="Completion">
             When the final match is logged, the tournament is marked completed
@@ -327,13 +378,13 @@ change   = round(K * (actual - expected))`}
         <Section id="profile-badges" title="Player profile & badges">
           <p>
             Each player page shows wins/losses, current streak, recent form
-            (last 5), peak/min ELO, an ELO chart, and head-to-head records
+            (last 5), peak/min rating, a rating chart, and head-to-head records
             against every opponent. It also surfaces three relationship badges:
           </p>
           <ul className="list-disc pl-5 space-y-2 mt-2">
             <li>
               <strong>Nemesis</strong> — the opponent who has taken the most
-              <em> net </em>ELO from you. If no opponent has a negative net
+              <em> net </em>rating from you. If no opponent has a negative net
               against you, you have no nemesis yet.
             </li>
             <li>
@@ -365,20 +416,28 @@ change   = round(K * (actual - expected))`}
               streaks. Players tied at the top are listed together.
             </StatGroup>
             <StatGroup title="Matches">
-              <strong>Biggest upset</strong> — single match with the largest
-              ELO gain for the winner.
+              <strong>Biggest upset</strong> — single match where the winner
+              had the lowest pre-match win probability.
               <br />
               <strong>Most upsets caused</strong> — players with the most wins
-              that exceeded the upset threshold.
+              below the upset threshold.
             </StatGroup>
             <StatGroup title="Players">
-              <strong>Peak ELO</strong> — highest ELO ever reached.
+              <strong>Peak rating</strong> — highest skill rating ever reached.
               <br />
               <strong>Biggest climber</strong> — largest difference between
-              current and personal-minimum ELO.
+              current and personal-minimum rating.
               <br />
               <strong>Biggest faller</strong> — largest difference between
-              personal-peak and current ELO.
+              personal-peak and current rating.
+              <br />
+              <span className="text-slate-400">
+                These (and the daily climb/fall stats) only count{' '}
+                <em>established</em> games — matches played while a player's
+                uncertainty was still in the placement range are excluded, so
+                the huge convergence swings of someone's first few games don't
+                hold the records forever.
+              </span>
             </StatGroup>
             <StatGroup title="Ladder">
               <strong>Most successful climbs</strong> — most challenge wins as
@@ -386,6 +445,32 @@ change   = round(K * (actual - expected))`}
               <br />
               <strong>Best defender</strong> — most challenge wins as the
               higher-ranked player.
+            </StatGroup>
+            <StatGroup title="Against the odds">
+              <strong>Giant Slayer</strong> — career wins above expectation
+              (actual wins minus what the ratings predicted).
+              <br />
+              <strong>Most Improbable Streak</strong> — win streak (3+) with
+              the lowest combined probability.
+              <br />
+              <strong>Upset Magnet</strong> — most losses as the clear
+              favorite.
+              <br />
+              <strong>Hardest Schedule</strong> — lowest average pre-match win
+              probability.
+              <br />
+              <strong>Chaos Agent</strong> — player the rating model predicts
+              worst.
+            </StatGroup>
+            <StatGroup title="Clutch">
+              <strong>Clutch Rating</strong> — best record in deciding games
+              of best-of series.
+              <br />
+              <strong>Comeback Artist</strong> — most series wins after losing
+              game one.
+              <br />
+              <strong>Bagels Dealt</strong> — most 11-0 shutout games (games
+              logged without points don't count).
             </StatGroup>
             <StatGroup title="Rivalries">
               <strong>Biggest rivalry</strong> — the pair that has played the
@@ -428,17 +513,36 @@ change   = round(K * (actual - expected))`}
 
         <Section id="glossary" title="Glossary">
           <dl className="space-y-2">
-            <Term word="ELO">
-              A skill rating that moves after each match based on the ratings
-              of the two players. Starts at 1000.
+            <Term word="Glicko-2">
+              The rating system Afterpong uses — a Bayesian successor to ELO
+              that tracks a skill rating plus an uncertainty (RD) per player.
             </Term>
-            <Term word="K-factor">
-              The maximum amount of ELO that can change hands in one match.
-              Afterpong uses K=32.
+            <Term word="Skill rating">
+              Best estimate of a player's strength. Starts at 1500, moves after
+              every match.
+            </Term>
+            <Term word="RD (rating deviation)">
+              How uncertain the skill rating is. Shrinks with games played,
+              grows with idle time. Shown on the leaderboard doubled, as the{' '}
+              <Mono>±</Mono> uncertainty.
+            </Term>
+            <Term word="Conservative rating">
+              Skill rating − the shown ± uncertainty (2×RD). The number the
+              leaderboard ranks and displays — "at least this good."
+            </Term>
+            <Term word="Volatility">
+              How erratic a player's results have been. Higher volatility lets
+              the rating move faster.
             </Term>
             <Term word="Upset">
-              A win where the winner gained more than 20 ELO. Implies the
-              winner was substantially lower-rated going in.
+              A win where the winner's pre-match win probability was below
+              37.5%. Implies the winner was substantially lower-rated going in.
+            </Term>
+            <Term word="Placement games">
+              A player's early games, while their RD is still above the
+              established threshold (150). Ratings move in big steps during
+              placement; movement-based stats (climber, faller, peak, daily
+              swings) skip these games.
             </Term>
             <Term word="Challenge match">
               A match where the two players are adjacent (or one slot apart,
@@ -455,8 +559,8 @@ change   = round(K * (actual - expected))`}
               participant count is not a power of two.
             </Term>
             <Term word="Snake seeding">
-              Seeding strategy that orders players by current ELO,
-              descending — strongest player is seed 1.
+              Seeding strategy that orders players by current leaderboard
+              rating, descending — strongest player is seed 1.
             </Term>
           </dl>
         </Section>

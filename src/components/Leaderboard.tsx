@@ -1,19 +1,28 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
+import { conservativeRating } from '../../lib/glicko';
 import type { Player } from '../types';
 import LogMatchModal from './LogMatchModal';
 
+const displayRating = (p: Player) => Math.round(conservativeRating(p));
+// Shown uncertainty is 2×RD, derived so the arithmetic is exact on screen:
+// leaderboard score = skill − ±.
+const displaySkill = (p: Player) => Math.round(p.rating);
+const displayUncertainty = (p: Player) => displaySkill(p) - displayRating(p);
+
 export default function Leaderboard() {
+  // ?log=1 (the PWA "Log a match" shortcut) opens the modal immediately.
+  const [searchParams, setSearchParams] = useSearchParams();
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showLogMatch, setShowLogMatch] = useState(false);
+  const [showLogMatch, setShowLogMatch] = useState(searchParams.get('log') === '1');
   const [newPlayerName, setNewPlayerName] = useState('');
   const [adding, setAdding] = useState(false);
 
   const fetchPlayers = async () => {
     try {
-      const data = await api.players.list('elo', true);
+      const data = await api.players.list('rating', true);
       setPlayers(data);
     } catch (err) {
       console.error('Failed to fetch players:', err);
@@ -46,7 +55,7 @@ export default function Leaderboard() {
   for (let i = 0; i < players.length; i++) {
     if (i === 0) {
       displayRanks.push(1);
-    } else if (players[i].elo === players[i - 1].elo) {
+    } else if (displayRating(players[i]) === displayRating(players[i - 1])) {
       displayRanks.push(displayRanks[i - 1]);
     } else {
       displayRanks.push(i + 1);
@@ -137,8 +146,13 @@ export default function Leaderboard() {
                   <span className="text-red-400">{player.losses}L</span>
                 </span>
               )}
-              <span className="text-lg font-mono font-bold tabular-nums">
-                {player.elo}
+              <span className="text-right">
+                <span className="block text-lg font-mono font-bold tabular-nums leading-tight">
+                  {displayRating(player)}
+                </span>
+                <span className="block text-[10px] font-mono text-slate-500 tabular-nums leading-tight">
+                  {displaySkill(player)} ±{displayUncertainty(player)}
+                </span>
               </span>
             </Link>
           ))}
@@ -148,9 +162,13 @@ export default function Leaderboard() {
       {showLogMatch && (
         <LogMatchModal
           players={players}
-          onClose={() => setShowLogMatch(false)}
+          onClose={() => {
+            setShowLogMatch(false);
+            if (searchParams.has('log')) setSearchParams({}, { replace: true });
+          }}
           onLogged={() => {
             setShowLogMatch(false);
+            if (searchParams.has('log')) setSearchParams({}, { replace: true });
             fetchPlayers();
           }}
         />

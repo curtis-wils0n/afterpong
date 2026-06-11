@@ -1,7 +1,10 @@
 export interface Player {
   id: number;
   name: string;
-  elo: number;
+  rating: number;
+  rd: number;
+  volatility: number;
+  lastMatchAt: string | null;
   challengeRank: number | null;
   onVacation: boolean;
   createdAt: string;
@@ -12,8 +15,10 @@ export interface Player {
 }
 
 export interface GameScore {
-  winnerScore: number;
-  loserScore: number;
+  winnerScore: number | null;
+  loserScore: number | null;
+  // Only meaningful for scoreless games (both scores null).
+  wonByMatchWinner?: boolean;
 }
 
 export interface Match {
@@ -22,8 +27,14 @@ export interface Match {
   loserId: number;
   winnerScore: number | null;
   loserScore: number | null;
-  winnerEloChange: number;
-  loserEloChange: number;
+  winnerRatingChange: number;
+  loserRatingChange: number;
+  winnerRatingBefore: number | null;
+  winnerRdBefore: number | null;
+  winnerVolBefore: number | null;
+  loserRatingBefore: number | null;
+  loserRdBefore: number | null;
+  loserVolBefore: number | null;
   isChallenge: boolean;
   games: GameScore[] | null;
   tournamentMatchId: number | null;
@@ -89,6 +100,10 @@ export interface StreakMatch {
   playerScore: number | null;
   opponentScore: number | null;
   date: string;
+  // The player's pre-match win probability (null for legacy rows).
+  winProb: number | null;
+  // Set on stat-detail matches that mix wins and losses.
+  won?: boolean;
 }
 
 export interface StreakEntry {
@@ -112,7 +127,7 @@ export interface StatsResponse {
         loser: PlayerRef;
         matchDate: string;
       }[];
-      eloGain: number;
+      winnerOdds: number;
     } | null;
     mostUpsetsCaused: { players: PlayerRef[]; count: number } | null;
     highestWinRate: {
@@ -121,8 +136,8 @@ export interface StatsResponse {
     } | null;
   };
   players: {
-    peakElo: { players: PlayerRef[]; elo: number } | null;
-    currentTopElo: { players: PlayerRef[]; elo: number } | null;
+    peakRating: { players: PlayerRef[]; rating: number } | null;
+    currentTopRating: { players: PlayerRef[]; rating: number } | null;
     biggestClimber: {
       entries: { player: PlayerRef; from: number; to: number }[];
       climb: number;
@@ -175,7 +190,7 @@ export interface StatsResponse {
     biggestVillain: {
       entries: {
         player: PlayerRef;
-        with: { player: PlayerRef; eloDrained: number }[];
+        with: { player: PlayerRef; ratingDrained: number }[];
       }[];
       count: number;
     } | null;
@@ -187,11 +202,69 @@ export interface StatsResponse {
       count: number;
     } | null;
   };
-  eloHistory: {
+  probability: {
+    giantSlayer: {
+      entries: {
+        player: PlayerRef;
+        wae: number;
+        games: number;
+        matches: StreakMatch[];
+      }[];
+      wae: number;
+    } | null;
+    mostImprobableStreak: {
+      player: PlayerRef;
+      count: number;
+      probability: number;
+      startDate: string;
+      endDate: string;
+      matches: StreakMatch[];
+    } | null;
+    upsetMagnet: {
+      entries: { player: PlayerRef; matches: StreakMatch[] }[];
+      count: number;
+    } | null;
+    hardestSchedule: {
+      entries: {
+        player: PlayerRef;
+        games: number;
+        opponents: { opponent: PlayerRef; games: number; avgWinProb: number }[];
+      }[];
+      avgWinProb: number;
+    } | null;
+    chaosAgent: {
+      entries: {
+        player: PlayerRef;
+        games: number;
+        matches: StreakMatch[];
+      }[];
+      brier: number;
+    } | null;
+  };
+  clutch: {
+    clutchRecord: {
+      entries: {
+        player: PlayerRef;
+        wins: number;
+        losses: number;
+        matches: StreakMatch[];
+      }[];
+      rate: number;
+    } | null;
+    comebackArtist: {
+      entries: { player: PlayerRef; matches: StreakMatch[] }[];
+      count: number;
+    } | null;
+    bagels: {
+      entries: { player: PlayerRef; matches: StreakMatch[] }[];
+      count: number;
+    } | null;
+  };
+  ratingHistory: {
     players: {
       id: number;
       name: string;
-      points: { t: string; elo: number }[];
+      points: { t: string; rating: number }[];
     }[];
   };
 }

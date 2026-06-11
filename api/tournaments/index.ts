@@ -8,6 +8,7 @@ import {
 } from '../../db/schema.js';
 import { eq, desc, inArray } from 'drizzle-orm';
 import { requireAuth, requireAdmin } from '../_lib/auth.js';
+import { conservativeRating } from '../../lib/glicko.js';
 import {
   buildRoundOneSlots,
   seedParticipants,
@@ -93,7 +94,7 @@ async function handleCreate(req: VercelRequest, res: VercelResponse) {
 
   // Seed participants
   const seeded = seedParticipants(
-    participantPlayers.map((p) => ({ id: p.id, elo: p.elo })),
+    participantPlayers.map((p) => ({ id: p.id, rating: conservativeRating(p) })),
     seeding,
   );
   const seedToPlayer = new Map(seeded.map((s) => [s.seed, s.playerId]));

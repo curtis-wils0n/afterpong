@@ -40,15 +40,16 @@ export function shuffle<T>(arr: T[]): T[] {
 }
 
 // Seeds the participants based on the chosen mode.
-// Snake: ELO descending (highest ELO = seed 1).
+// Snake: rating descending (highest rating = seed 1). Callers pass the
+// conservative rating so seeding matches the leaderboard order.
 // Random: shuffled order.
 export function seedParticipants(
-  players: { id: number; elo: number }[],
+  players: { id: number; rating: number }[],
   seeding: Seeding,
 ): SeededParticipant[] {
-  let ordered: { id: number; elo: number }[];
+  let ordered: { id: number; rating: number }[];
   if (seeding === 'snake') {
-    ordered = [...players].sort((a, b) => b.elo - a.elo);
+    ordered = [...players].sort((a, b) => b.rating - a.rating);
   } else {
     ordered = shuffle(players);
   }

@@ -1,4 +1,5 @@
 import type {
+  GameScore,
   Player,
   Match,
   MatchListResponse,
@@ -37,7 +38,7 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   players: {
-    list: (sort?: 'elo' | 'rank', includeStats?: boolean) => {
+    list: (sort?: 'rating' | 'rank', includeStats?: boolean) => {
       const params = new URLSearchParams();
       if (sort) params.set('sort', sort);
       if (includeStats) params.set('include', 'stats');
@@ -73,7 +74,7 @@ export const api = {
       winnerScore?: number;
       loserScore?: number;
       isChallenge?: boolean;
-      games?: { winnerScore: number; loserScore: number }[];
+      games?: GameScore[];
     }) =>
       fetchJSON<Match>('/matches', {
         method: 'POST',
@@ -81,6 +82,8 @@ export const api = {
       }),
     deleteLast: () =>
       fetchJSON<Match>('/matches', { method: 'DELETE' }),
+    delete: (id: number) =>
+      fetchJSON<{ ok: true }>(`/matches/${id}`, { method: 'DELETE' }),
   },
   stats: {
     get: () => fetchJSON<StatsResponse>('/stats'),
@@ -108,7 +111,7 @@ export const api = {
         winnerScore?: number;
         loserScore?: number;
         isChallenge?: boolean;
-        games?: { winnerScore: number; loserScore: number }[];
+        games?: GameScore[];
       },
     ) =>
       fetchJSON<Match>(
