@@ -1,0 +1,27 @@
+name: Migrate
+
+# Applies database migrations when main changes. Runs from CI rather than the
+# Vercel build: build containers get the wrong DB URL on preview deploys and
+# swallow build logs, and this keeps a visible migration log per merge.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'drizzle/**'
+      - 'drizzle.config.ts'
+      - '.github/workflows/migrate.yml'
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx drizzle-kit migrate
+        env:
+          STORAGE_DATABASE_URL: ${{ secrets.STORAGE_DATABASE_URL }}
