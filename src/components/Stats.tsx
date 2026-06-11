@@ -893,7 +893,7 @@ export default function Stats() {
         {stats.probability.mostImprobableStreak ? (
           <StatCard
             label="Most Improbable Streak"
-            value={`${(stats.probability.mostImprobableStreak.probability * 100).toFixed(1)}%`}
+            value={`1 in ${Math.round(1 / stats.probability.mostImprobableStreak.probability).toLocaleString()}`}
             valueClass="text-yellow-400"
             tooltip={TIPS.mostImprobableStreak}
           >
