@@ -254,7 +254,7 @@ export default function PlayerProfile() {
       {/* Rating Chart */}
       {ratingHistory.length > 1 && (
         <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-6">
-          <h3 className="text-sm text-slate-400 mb-3">Rating History</h3>
+          <h3 className="text-sm text-slate-400 mb-3">Skill History</h3>
           <ResponsiveContainer width="100%" height={200}>
             <ComposedChart data={ratingHistory}>
               <XAxis dataKey="label" hide />
@@ -276,7 +276,7 @@ export default function PlayerProfile() {
                 formatter={(value, _name, item) => {
                   const band = (item?.payload as { band?: [number, number] | null } | undefined)?.band;
                   const unc = band ? Math.round((band[1] - band[0]) / 2) : null;
-                  return [unc != null ? `${value} \u00b1${unc}` : `${value}`, 'Rating'];
+                  return [unc != null ? `${value} \u00b1${unc}` : `${value}`, 'Skill'];
                 }}
                 labelFormatter={(_label, payload) => {
                   const data = payload?.[0]?.payload as { opponent?: string; date?: string } | undefined;

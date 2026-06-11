@@ -477,7 +477,7 @@ function RatingHistoryChart({
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-6 h-[520px] flex flex-col">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm text-slate-400">Rating over time</h3>
+        <h3 className="text-sm text-slate-400">Skill over time</h3>
         <div className="flex gap-1">
           {WINDOW_OPTIONS.map((opt) => (
             <button
