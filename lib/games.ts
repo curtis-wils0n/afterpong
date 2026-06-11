@@ -22,10 +22,11 @@ export function gameWonByMatchWinner(g: GameScore): boolean {
   return isScoredGame(g) ? g.winnerScore > g.loserScore : !!g.wonByMatchWinner;
 }
 
-// True if any game in the series carries real point scores. (Legacy data may
-// still contain 1-0 placeholder scores; a max score of 1 isn't a real game.)
+// True if any game in the series carries real point scores. A table-tennis
+// game can't finish with both players under 11, so lower "scores" (1-0, 2-1)
+// are placeholders from before scoreless logging existed.
 export function hasPointScores(games: GameScore[]): boolean {
   return games.some(
-    (g) => isScoredGame(g) && Math.max(g.winnerScore, g.loserScore) > 1,
+    (g) => isScoredGame(g) && Math.max(g.winnerScore, g.loserScore) >= 11,
   );
 }

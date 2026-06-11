@@ -1,9 +1,10 @@
-// One-time cleanup: convert legacy 1-0 placeholder game scores (the old
-// convention for "game logged without points") into the explicit scoreless
-// form: { winnerScore: null, loserScore: null, wonByMatchWinner }.
+// One-time cleanup: convert legacy placeholder game scores (the old way of
+// logging a game without points — 1-0, 2-1, etc.) into the explicit
+// scoreless form: { winnerScore: null, loserScore: null, wonByMatchWinner }.
 //
-// A real table-tennis game can't end 1-0, so any game whose two scores sum
-// to 1 is a placeholder. Idempotent: converted games no longer match.
+// A real table-tennis game can't finish with both players under 11, so any
+// game whose max score is below 11 is a placeholder. Idempotent: converted
+// games no longer match.
 //
 //   npm run db:normalize-scoreless
 
@@ -16,11 +17,11 @@ async function main() {
     SET games = (
       SELECT jsonb_agg(
         CASE
-          WHEN ((e->>'winnerScore')::int + (e->>'loserScore')::int) = 1
+          WHEN GREATEST((e->>'winnerScore')::int, (e->>'loserScore')::int) < 11
           THEN jsonb_build_object(
             'winnerScore', null,
             'loserScore', null,
-            'wonByMatchWinner', (e->>'winnerScore')::int = 1
+            'wonByMatchWinner', (e->>'winnerScore')::int > (e->>'loserScore')::int
           )
           ELSE e
         END
@@ -31,7 +32,7 @@ async function main() {
     WHERE games IS NOT NULL
       AND EXISTS (
         SELECT 1 FROM jsonb_array_elements(games) e
-        WHERE ((e->>'winnerScore')::int + (e->>'loserScore')::int) = 1
+        WHERE GREATEST((e->>'winnerScore')::int, (e->>'loserScore')::int) < 11
       )
   `);
   console.log(`Normalized placeholder games. Rows updated: ${result.rowCount ?? '?'}`);
