@@ -295,6 +295,12 @@ export default function Docs() {
               derived from the games you enter, not stored separately.
             </li>
             <li>
+              <strong>Points optional</strong>. Toggle <em>Points: off</em> to
+              log a multi-game match without point scores — just tap who won
+              each game. The series score still counts for stats; only
+              point-based stats (like Bagels) skip these games.
+            </li>
+            <li>
               <strong>Challenge flag</strong>. Only set this if both players
               are on the ladder within range. The API rejects invalid
               challenges.
@@ -463,7 +469,8 @@ export default function Docs() {
               <strong>Comeback Artist</strong> — most series wins after losing
               game one.
               <br />
-              <strong>Bagels Dealt</strong> — most shutout games.
+              <strong>Bagels Dealt</strong> — most 11-0 shutout games (games
+              logged without points don't count).
             </StatGroup>
             <StatGroup title="Rivalries">
               <strong>Biggest rivalry</strong> — the pair that has played the

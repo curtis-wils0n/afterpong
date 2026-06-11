@@ -31,6 +31,9 @@ export default function LogMatchModal({
   const [gameScores, setGameScores] = useState([
     { player1Score: '', player2Score: '' },
   ]);
+  // When off, games are logged without point scores: each game just records
+  // who won it (stored as a 1-0 placeholder, the league's convention).
+  const [trackPoints, setTrackPoints] = useState(true);
   const isTournament = tournamentMatchId != null;
   // Tournament matches are never challenge matches.
   const [isChallenge, setIsChallenge] = useState(
@@ -45,6 +48,7 @@ export default function LogMatchModal({
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
       if (player1Id === '' || player2Id === '') return;
+      if (!trackPoints) return;
 
       e.preventDefault();
       const field = e.key === 'ArrowLeft' ? 'player1Score' : 'player2Score';
@@ -56,7 +60,7 @@ export default function LogMatchModal({
         return updated;
       });
     },
-    [player1Id, player2Id],
+    [player1Id, player2Id, trackPoints],
   );
 
   useEffect(() => {
@@ -120,6 +124,43 @@ export default function LogMatchModal({
     const updated = [...gameScores];
     updated[index] = { ...updated[index], [field]: value };
     setGameScores(updated);
+  };
+
+  // Scoreless mode: clicking a player marks them as that game's winner
+  // (1-0 placeholder); clicking the current winner again clears the game.
+  const setGameWinner = (index: number, who: 1 | 2) => {
+    const updated = [...gameScores];
+    const current = updated[index];
+    const alreadyWinner =
+      who === 1
+        ? current.player1Score === '1' && current.player2Score === '0'
+        : current.player2Score === '1' && current.player1Score === '0';
+    updated[index] = alreadyWinner
+      ? { player1Score: '', player2Score: '' }
+      : who === 1
+        ? { player1Score: '1', player2Score: '0' }
+        : { player1Score: '0', player2Score: '1' };
+    setGameScores(updated);
+  };
+
+  const toggleTrackPoints = () => {
+    if (trackPoints) {
+      // Collapse any entered point scores to 1-0 placeholders by game winner.
+      setGameScores((prev) =>
+        prev.map((g) => {
+          if (g.player1Score === '' || g.player2Score === '') {
+            return { player1Score: '', player2Score: '' };
+          }
+          const p1 = Number(g.player1Score);
+          const p2 = Number(g.player2Score);
+          if (p1 === p2) return { player1Score: '', player2Score: '' };
+          return p1 > p2
+            ? { player1Score: '1', player2Score: '0' }
+            : { player1Score: '0', player2Score: '1' };
+        }),
+      );
+    }
+    setTrackPoints(!trackPoints);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -248,9 +289,11 @@ export default function LogMatchModal({
                   {player2.name}
                 </span>
               </div>
-              <p className="text-xs text-slate-600 mt-1">
-                Tip: press <kbd className="px-1 py-0.5 bg-slate-700 rounded text-slate-400">&larr;</kbd> <kbd className="px-1 py-0.5 bg-slate-700 rounded text-slate-400">&rarr;</kbd> arrow keys to score points
-              </p>
+              {trackPoints && (
+                <p className="text-xs text-slate-600 mt-1">
+                  Tip: press <kbd className="px-1 py-0.5 bg-slate-700 rounded text-slate-400">&larr;</kbd> <kbd className="px-1 py-0.5 bg-slate-700 rounded text-slate-400">&rarr;</kbd> arrow keys to score points
+                </p>
+              )}
             </div>
           )}
 
@@ -258,16 +301,32 @@ export default function LogMatchModal({
           {player1 && player2 && (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-sm text-slate-400">Game Scores</label>
-                <button
-                  type="button"
-                  onClick={addGame}
-                  className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded transition-colors"
-                >
-                  + Add game
-                </button>
+                <label className="text-sm text-slate-400">
+                  {trackPoints ? 'Game Scores' : 'Games'}
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={toggleTrackPoints}
+                    className={`text-xs px-2 py-1 rounded transition-colors ${
+                      trackPoints
+                        ? 'text-slate-400 bg-slate-700/60 hover:bg-slate-700'
+                        : 'text-sky-300 bg-sky-500/10 hover:bg-sky-500/20'
+                    }`}
+                  >
+                    {trackPoints ? 'Points: on' : 'Points: off'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={addGame}
+                    className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded transition-colors"
+                  >
+                    + Add game
+                  </button>
+                </div>
               </div>
               {/* Column headers */}
+              {trackPoints && (
               <div className="flex items-center gap-2 mb-1 px-1">
                 <span className="w-6 shrink-0" />
                 <span className="flex-1 text-xs text-slate-500 text-center truncate">
@@ -279,6 +338,7 @@ export default function LogMatchModal({
                 </span>
                 {gameScores.length > 1 && <span className="w-5 shrink-0" />}
               </div>
+              )}
               <div className="space-y-2">
                 {gameScores.map((game, index) => {
                   const p1 = Number(game.player1Score);
@@ -287,6 +347,48 @@ export default function LogMatchModal({
                     game.player1Score !== '' && game.player2Score !== '';
                   const p1Won = gameComplete && p1 > p2;
                   const p2Won = gameComplete && p2 > p1;
+
+                  if (!trackPoints) {
+                    return (
+                      <div key={index} className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500 w-6 shrink-0">
+                          G{index + 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setGameWinner(index, 1)}
+                          className={`flex-1 min-w-0 truncate rounded-lg px-3 py-1.5 text-sm border transition-colors ${
+                            p1Won
+                              ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300'
+                              : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-500'
+                          }`}
+                        >
+                          {player1.name}
+                        </button>
+                        <span className="text-slate-600 text-xs shrink-0">won</span>
+                        <button
+                          type="button"
+                          onClick={() => setGameWinner(index, 2)}
+                          className={`flex-1 min-w-0 truncate rounded-lg px-3 py-1.5 text-sm border transition-colors ${
+                            p2Won
+                              ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300'
+                              : 'bg-slate-700 border-slate-600 text-slate-300 hover:border-slate-500'
+                          }`}
+                        >
+                          {player2.name}
+                        </button>
+                        {gameScores.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeGame(index)}
+                            className="text-slate-500 hover:text-red-400 text-sm w-5 shrink-0 text-center transition-colors"
+                          >
+                            &times;
+                          </button>
+                        )}
+                      </div>
+                    );
+                  }
 
                   return (
                     <div key={index} className="flex items-center gap-2">
@@ -392,7 +494,9 @@ export default function LogMatchModal({
                 ? 'Logging...'
                 : winnerName
                   ? `Log Win for ${winnerName}`
-                  : 'Enter scores...'}
+                  : trackPoints
+                    ? 'Enter scores...'
+                    : 'Pick game winners...'}
             </button>
           </div>
         </form>

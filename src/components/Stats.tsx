@@ -151,7 +151,7 @@ const TIPS = {
   clutchRecord:
     'Best record in deciding games of a best-of series, e.g. game 3 at 1-1 (min 5 deciders)',
   comebackArtist: 'Most series wins after losing the first game',
-  bagels: 'Most 11-0 (or any shutout) games dealt',
+  bagels: 'Most 11-0 shutout games dealt (games logged without point scores don\u2019t count)',
   biggestRivalry: 'Pair of players with the most total matches between them',
   dominator:
     'Largest gap between wins and losses in any head-to-head matchup',

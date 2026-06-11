@@ -4,6 +4,7 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'rec
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { isUpset, expectedScore, conservativeRating } from '../../lib/glicko';
+import { hasPointScores } from '../lib/games';
 import {
   computeNemesis,
   computeRival,
@@ -475,7 +476,7 @@ export default function PlayerProfile() {
                                 >
                                   {won ? 'W' : 'L'}
                                 </span>
-                                {match.games && match.games.length > 0 ? (
+                                {match.games && match.games.length > 0 && hasPointScores(match.games) ? (
                                   <span className="text-slate-500 text-sm">
                                     {won
                                       ? `${match.winnerScore}-${match.loserScore}`
@@ -568,7 +569,7 @@ export default function PlayerProfile() {
                           {opponentName}
                         </Link>
                       </span>
-                      {match.games && match.games.length > 0 ? (
+                      {match.games && match.games.length > 0 && hasPointScores(match.games) ? (
                         <span className="text-slate-500 text-sm">
                           {won
                             ? `${match.winnerScore}-${match.loserScore}`

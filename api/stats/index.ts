@@ -348,10 +348,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (m.games.length >= 2 && m.games[0].winnerScore < m.games[0].loserScore) {
         winner.comebacks += 1;
       }
+      // A bagel needs a real shutout score (11-0 or better). 1-0 entries are
+      // placeholders for games logged without point tracking.
       for (const g of m.games) {
-        if (g.winnerScore > g.loserScore && g.loserScore === 0) {
+        if (g.winnerScore >= 11 && g.loserScore === 0) {
           winner.bagels += 1;
-        } else if (g.loserScore > g.winnerScore && g.winnerScore === 0) {
+        } else if (g.loserScore >= 11 && g.winnerScore === 0) {
           loser.bagels += 1;
         }
       }

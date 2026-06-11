@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { isUpset } from '../../lib/glicko';
+import { hasPointScores } from '../lib/games';
 import type { Match, Player } from '../types';
 
 const PAGE_SIZE = 25;
@@ -164,7 +165,7 @@ export default function MatchHistory() {
                     >
                       {match.loser?.name ?? `Player ${match.loserId}`}
                     </Link>
-                    {match.games && match.games.length > 0 ? (
+                    {match.games && match.games.length > 0 && hasPointScores(match.games) ? (
                       <span className="text-slate-400 text-sm shrink-0">
                         {match.winnerScore}-{match.loserScore}
                         {' '}
