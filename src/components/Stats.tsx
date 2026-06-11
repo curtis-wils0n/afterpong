@@ -183,9 +183,11 @@ function formatDateShort(iso: string) {
 function StreakMatchList({
   matches,
   isWin,
+  showOdds = false,
 }: {
   matches: StreakMatch[];
   isWin: boolean;
+  showOdds?: boolean;
 }) {
   const scoreClass = isWin ? 'text-emerald-400' : 'text-red-400';
   return (
@@ -198,6 +200,11 @@ function StreakMatchList({
             {m.playerScore != null && m.opponentScore != null && (
               <span className={`tabular-nums ${scoreClass}`}>
                 {m.playerScore}-{m.opponentScore}
+              </span>
+            )}
+            {showOdds && m.winProb != null && (
+              <span className="text-yellow-400/80 tabular-nums">
+                {Math.round(m.winProb * 100)}%
               </span>
             )}
             <span className="text-slate-600 tabular-nums">
@@ -893,7 +900,23 @@ export default function Stats() {
         {stats.probability.mostImprobableStreak ? (
           <StatCard
             label="Most Improbable Streak"
-            value={`1 in ${Math.round(1 / stats.probability.mostImprobableStreak.probability).toLocaleString()}`}
+            value={
+              <Tooltip
+                align="left"
+                widthClass="w-72"
+                content={
+                  <StreakMatchList
+                    matches={stats.probability.mostImprobableStreak.matches}
+                    isWin
+                    showOdds
+                  />
+                }
+              >
+                <span className="cursor-help">
+                  1 in {Math.round(1 / stats.probability.mostImprobableStreak.probability).toLocaleString()}
+                </span>
+              </Tooltip>
+            }
             valueClass="text-yellow-400"
             tooltip={TIPS.mostImprobableStreak}
           >

@@ -38,6 +38,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     playerScore: number | null;
     opponentScore: number | null;
     date: string;
+    // The player's pre-match win probability (null for legacy rows).
+    winProb: number | null;
   };
   type PlayerAcc = {
     currentRating: number;
@@ -143,6 +145,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     probability: number;
     startDate: string;
     endDate: string;
+    matches: StreakMatchRef[];
   } | null = null;
 
   // Single chronological pass
@@ -240,6 +243,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       playerScore: m.winnerScore,
       opponentScore: m.loserScore,
       date: ts,
+      winProb: winnerOdds,
     });
     winner.currentWinStreak += 1;
     winner.currentWinStreakProb *= winnerOdds ?? 1;
@@ -256,6 +260,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         probability: winner.currentWinStreakProb,
         startDate: winner.currentWinStreakStart ?? ts,
         endDate: ts,
+        matches: [...winner.currentWinStreakMatches],
       };
     }
     if (winner.currentWinStreak > winner.longestWinStreak) {
@@ -277,6 +282,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       playerScore: m.loserScore,
       opponentScore: m.winnerScore,
       date: ts,
+      winProb: winnerOdds != null ? 1 - winnerOdds : null,
     });
     loser.currentLossStreak += 1;
     if (loser.currentLossStreak > loser.longestLossStreak) {
@@ -735,6 +741,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             playerScore: mm.playerScore,
             opponentScore: mm.opponentScore,
             date: mm.date,
+            winProb: mm.winProb,
           })),
         };
       }),
@@ -890,6 +897,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             probability: improbableStreak.probability,
             startDate: improbableStreak.startDate,
             endDate: improbableStreak.endDate,
+            matches: improbableStreak.matches.map((mm) => ({
+              opponent: getRef(mm.opponentId),
+              playerScore: mm.playerScore,
+              opponentScore: mm.opponentScore,
+              date: mm.date,
+              winProb: mm.winProb,
+            })),
           }
         : null,
       upsetMagnet: wrapCount(upsetMagnet),

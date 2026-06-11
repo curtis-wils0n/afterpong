@@ -100,6 +100,8 @@ export interface StreakMatch {
   playerScore: number | null;
   opponentScore: number | null;
   date: string;
+  // The player's pre-match win probability (null for legacy rows).
+  winProb: number | null;
 }
 
 export interface StreakEntry {
@@ -209,6 +211,7 @@ export interface StatsResponse {
       probability: number;
       startDate: string;
       endDate: string;
+      matches: StreakMatch[];
     } | null;
     upsetMagnet: { players: PlayerRef[]; count: number } | null;
     hardestSchedule: {
