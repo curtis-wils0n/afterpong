@@ -138,11 +138,10 @@ export default function PlayerProfile() {
     return points;
   })();
 
-  // Scale the axis to the skill line, not the ribbon — early-career bands
-  // are enormous (±700 at debut) and flatten the line if included. The
-  // ribbon clips off-canvas where it's wider than the view.
   const yAxis = (() => {
-    const values = ratingHistory.map((pt) => pt.rating);
+    const values = ratingHistory.flatMap((pt) =>
+      pt.band ? [pt.band[0], pt.band[1]] : [pt.rating],
+    );
     return niceAxis(Math.min(...values), Math.max(...values));
   })();
 
@@ -169,9 +168,31 @@ export default function PlayerProfile() {
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl font-bold">{player.name}</h1>
               {player.onVacation && (
-                <span className="text-sky-400 text-xs font-medium px-2 py-0.5 bg-sky-400/10 rounded-full">
+                <span
+                  className="text-sky-400 text-xs font-medium px-2 py-0.5 bg-sky-400/10 rounded-full"
+                  title="Hidden from new matches. Ladder position is held until they return."
+                >
                   ON VACATION
                 </span>
+              )}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleToggleVacation}
+                  disabled={updatingVacation}
+                  title="Hidden from new matches while on vacation. Ladder position is held."
+                  className={`text-xs font-medium px-2 py-0.5 rounded-full border transition-colors disabled:opacity-50 ${
+                    player.onVacation
+                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/20'
+                      : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:border-slate-500'
+                  }`}
+                >
+                  {updatingVacation
+                    ? 'Updating...'
+                    : player.onVacation
+                      ? 'Back from vacation'
+                      : 'Set on vacation'}
+                </button>
               )}
             </div>
             {player.challengeRank != null && (
@@ -199,33 +220,6 @@ export default function PlayerProfile() {
             </span>
           </div>
         </div>
-        {(isAdmin || player.onVacation) && (
-          <div className="mb-4">
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={handleToggleVacation}
-                disabled={updatingVacation}
-                className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 ${
-                  player.onVacation
-                    ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/20'
-                    : 'bg-slate-700/50 border-slate-600 text-slate-300 hover:border-slate-500'
-                }`}
-              >
-                {updatingVacation
-                  ? 'Updating...'
-                  : player.onVacation
-                    ? 'Back from vacation'
-                    : 'Set on vacation'}
-              </button>
-            )}
-            {player.onVacation && (
-              <p className="text-xs text-slate-500 mt-1">
-                Hidden from new matches. Ladder position is held until they return.
-              </p>
-            )}
-          </div>
-        )}
         <div className="grid grid-cols-4 gap-4 text-center">
           <div>
             <div className="text-2xl font-bold">
@@ -264,13 +258,12 @@ export default function PlayerProfile() {
       {ratingHistory.length > 1 && (
         <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-6">
           <h3 className="text-sm text-slate-400 mb-3">Skill History</h3>
-          <ResponsiveContainer width="100%" height={200}>
+          <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={ratingHistory}>
               <XAxis dataKey="label" hide />
               <YAxis
                 domain={yAxis.domain}
                 ticks={yAxis.ticks}
-                allowDataOverflow
                 tick={{ fill: '#64748b', fontSize: 12 }}
                 width={40}
                 axisLine={false}
