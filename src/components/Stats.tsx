@@ -115,16 +115,16 @@ function NoData({ label, tooltip }: { label: string; tooltip?: string }) {
 }
 
 const TIPS = {
-  peakRating: 'Highest skill rating anyone has ever reached',
+  peakRating: 'Highest skill rating anyone has reached (placement games excluded)',
   currentTopRating: 'Highest skill rating of any active player right now',
   biggestClimber:
-    'Largest gap between a player’s lowest ever rating and their current rating',
+    'Largest gap between a player’s lowest rating and their current rating, once established (placement games excluded)',
   biggestFaller:
-    'Largest gap between a player’s peak rating and their current rating',
+    'Largest gap between a player’s peak rating and their current rating, once established (placement games excluded)',
   biggestDailyClimber:
-    'Largest net rating gained by any player on a single day',
+    'Largest net rating gained by any player on a single day (placement games excluded)',
   biggestDailyFaller:
-    'Largest net rating lost by any player on a single day',
+    'Largest net rating lost by any player on a single day (placement games excluded)',
   currentWinStreak: 'Longest active streak of consecutive wins',
   longestWinStreak: 'Longest streak of consecutive wins ever recorded',
   currentLossStreak: 'Longest active streak of consecutive losses',

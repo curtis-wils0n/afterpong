@@ -130,6 +130,14 @@ export function rateMatch(
   };
 }
 
+// A player is "established" once their pre-match RD is at or below this.
+// Games played while provisional (above it) are placement games: rating
+// swings there reflect convergence, not form, so movement-based stats
+// (biggest climber/faller, peak rating, daily climbs) skip them. RD drops
+// below 150 after roughly 8 games, and can rise back above it after a very
+// long idle stretch.
+export const PROVISIONAL_RD_CUTOFF = 150;
+
 // A win is an upset when the winner's pre-match win probability was below
 // this. 0.375 matches the spirit of the old ELO rule (gain > 20 with K=32).
 export const UPSET_PROBABILITY = 0.375;

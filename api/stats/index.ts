@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { db } from '../../db/index.js';
 import { players, matches } from '../../db/schema.js';
 import { asc } from 'drizzle-orm';
-import { isUpset, expectedScore } from '../../lib/glicko.js';
+import { isUpset, expectedScore, PROVISIONAL_RD_CUTOFF } from '../../lib/glicko.js';
 import {
   computeNemesis,
   computeRival,
@@ -40,9 +40,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   };
   type PlayerAcc = {
     currentRating: number;
-    peakRating: number;
+    peakRating: number | null;
     peakDate: string;
-    minRating: number;
+    minRating: number | null;
     currentWinStreak: number;
     currentLossStreak: number;
     longestWinStreak: number;
@@ -80,9 +80,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   for (const p of allPlayers) {
     acc.set(p.id, {
       currentRating: 1500,
-      peakRating: 1500,
+      peakRating: null,
       peakDate: p.createdAt.toISOString(),
-      minRating: 1500,
+      minRating: null,
       currentWinStreak: 0,
       currentLossStreak: 0,
       longestWinStreak: 0,
@@ -127,16 +127,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     winner.currentRating += m.winnerRatingChange;
     loser.currentRating += m.loserRatingChange;
 
+    // Movement stats (peak/min, climbs, falls, daily swings) only count games
+    // where the player was already established — placement-game swings are
+    // convergence, not form.
+    const winnerCounted =
+      m.winnerRdBefore != null && m.winnerRdBefore <= PROVISIONAL_RD_CUTOFF;
+    const loserCounted =
+      m.loserRdBefore != null && m.loserRdBefore <= PROVISIONAL_RD_CUTOFF;
+
     const ts = m.createdAt.toISOString();
     ratingHistory.get(m.winnerId)!.push({ t: ts, rating: Math.round(winner.currentRating) });
     ratingHistory.get(m.loserId)!.push({ t: ts, rating: Math.round(loser.currentRating) });
 
     // Daily start/end rating buckets (Mountain-time day)
     const mtDay = mtDayFmt.format(m.createdAt);
-    for (const [pid, before, after] of [
-      [m.winnerId, winnerRatingBeforeAcc, winner.currentRating],
-      [m.loserId, loserRatingBeforeAcc, loser.currentRating],
+    for (const [pid, before, after, counted] of [
+      [m.winnerId, winnerRatingBeforeAcc, winner.currentRating, winnerCounted],
+      [m.loserId, loserRatingBeforeAcc, loser.currentRating, loserCounted],
     ] as const) {
+      if (!counted) continue;
       let dayMap = dailyByPlayer.get(pid);
       if (!dayMap) {
         dayMap = new Map();
@@ -150,20 +159,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Track peak and min
-    if (winner.currentRating > winner.peakRating) {
-      winner.peakRating = winner.currentRating;
-      winner.peakDate = m.createdAt.toISOString();
+    // Track peak and min over established games (both endpoints of the first
+    // counted game seed the baseline).
+    if (winnerCounted) {
+      if (winner.peakRating == null || winner.currentRating > winner.peakRating) {
+        winner.peakRating = Math.max(winnerRatingBeforeAcc, winner.currentRating);
+        winner.peakDate = ts;
+      }
+      winner.minRating = Math.min(
+        winner.minRating ?? winnerRatingBeforeAcc,
+        winner.currentRating,
+      );
     }
-    if (loser.currentRating < loser.minRating) {
-      loser.minRating = loser.currentRating;
-    }
-    if (winner.currentRating < winner.minRating) {
-      winner.minRating = winner.currentRating;
-    }
-    if (loser.currentRating > loser.peakRating) {
-      loser.peakRating = loser.currentRating;
-      loser.peakDate = m.createdAt.toISOString();
+    if (loserCounted) {
+      if (loser.peakRating == null || loserRatingBeforeAcc > loser.peakRating) {
+        loser.peakRating = Math.max(loserRatingBeforeAcc, loser.currentRating);
+        loser.peakDate = ts;
+      }
+      loser.minRating = Math.min(
+        loser.minRating ?? loserRatingBeforeAcc,
+        loser.currentRating,
+      );
     }
 
     // Win/loss counters
@@ -372,7 +388,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   );
   const biggestOp = pickAllMax(playerList, (p) => rivalCounts.get(p.id) ?? 0);
   const bestDefender = pickAllMax(playerList, (p) => acc.get(p.id)!.defenses);
-  const peak = pickAllMax(playerList, (p) => acc.get(p.id)!.peakRating);
+  const peak = pickAllMax(playerList, (p) => acc.get(p.id)!.peakRating ?? -Infinity);
   const currentTop = pickAllMax(playerList, (p) => acc.get(p.id)!.currentRating);
   // Win-rate stat requires a minimum match count so a single lucky win
   // doesn't crown someone at 100%.
@@ -385,11 +401,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   });
   const climber = pickAllMax(playerList, (p) => {
     const a = acc.get(p.id)!;
-    return a.currentRating - a.minRating;
+    return a.minRating == null ? -Infinity : a.currentRating - a.minRating;
   });
   const faller = pickAllMax(playerList, (p) => {
     const a = acc.get(p.id)!;
-    return a.peakRating - a.currentRating;
+    return a.peakRating == null ? -Infinity : a.peakRating - a.currentRating;
   });
 
   type DailyEntry = {
@@ -689,7 +705,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     },
     players: {
       peakRating:
-        peak && peak.score > 1500
+        peak && Number.isFinite(peak.score)
           ? {
               players: peak.players,
               rating: Math.round(peak.score),
@@ -707,7 +723,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ? {
               entries: climber.players.map((pl) => ({
                 player: pl,
-                from: Math.round(acc.get(pl.id)!.minRating),
+                from: Math.round(acc.get(pl.id)!.minRating!),
                 to: Math.round(acc.get(pl.id)!.currentRating),
               })),
               climb: Math.round(climber.score),
@@ -718,7 +734,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ? {
               entries: faller.players.map((pl) => ({
                 player: pl,
-                from: Math.round(acc.get(pl.id)!.peakRating),
+                from: Math.round(acc.get(pl.id)!.peakRating!),
                 to: Math.round(acc.get(pl.id)!.currentRating),
               })),
               fall: Math.round(faller.score),

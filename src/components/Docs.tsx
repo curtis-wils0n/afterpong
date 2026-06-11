@@ -424,6 +424,14 @@ export default function Docs() {
               <br />
               <strong>Biggest faller</strong> — largest difference between
               personal-peak and current rating.
+              <br />
+              <span className="text-slate-400">
+                These (and the daily climb/fall stats) only count{' '}
+                <em>established</em> games — matches played while a player's
+                uncertainty was still in the placement range are excluded, so
+                the huge convergence swings of someone's first few games don't
+                hold the records forever.
+              </span>
             </StatGroup>
             <StatGroup title="Ladder">
               <strong>Most successful climbs</strong> — most challenge wins as
@@ -497,6 +505,12 @@ export default function Docs() {
             <Term word="Upset">
               A win where the winner's pre-match win probability was below
               37.5%. Implies the winner was substantially lower-rated going in.
+            </Term>
+            <Term word="Placement games">
+              A player's early games, while their RD is still above the
+              established threshold (150). Ratings move in big steps during
+              placement; movement-based stats (climber, faller, peak, daily
+              swings) skip these games.
             </Term>
             <Term word="Challenge match">
               A match where the two players are adjacent (or one slot apart,
