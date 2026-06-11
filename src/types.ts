@@ -196,6 +196,36 @@ export interface StatsResponse {
       count: number;
     } | null;
   };
+  probability: {
+    giantSlayer: {
+      entries: { player: PlayerRef; wae: number; games: number }[];
+      wae: number;
+    } | null;
+    mostImprobableStreak: {
+      player: PlayerRef;
+      count: number;
+      probability: number;
+      startDate: string;
+      endDate: string;
+    } | null;
+    upsetMagnet: { players: PlayerRef[]; count: number } | null;
+    hardestSchedule: {
+      entries: { player: PlayerRef; games: number }[];
+      avgWinProb: number;
+    } | null;
+    chaosAgent: {
+      entries: { player: PlayerRef; games: number }[];
+      brier: number;
+    } | null;
+  };
+  clutch: {
+    clutchRecord: {
+      entries: { player: PlayerRef; wins: number; losses: number }[];
+      rate: number;
+    } | null;
+    comebackArtist: { players: PlayerRef[]; count: number } | null;
+    bagels: { players: PlayerRef[]; count: number } | null;
+  };
   ratingHistory: {
     players: {
       id: number;

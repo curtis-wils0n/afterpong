@@ -139,6 +139,19 @@ const TIPS = {
     'Career count of challenge matches won as the lower-ranked challenger',
   bestDefender:
     'Career count of challenge matches won as the higher-ranked defender',
+  giantSlayer:
+    'Career wins above expectation: how many more matches a player has won than the ratings predicted (min 10 rated games)',
+  mostImprobableStreak:
+    'Win streak (3+) with the lowest combined probability — every win\u2019s pre-match odds multiplied together',
+  upsetMagnet: 'Most losses suffered as the clear favorite (the mirror of Most Upsets Caused)',
+  hardestSchedule:
+    'Lowest average pre-match win probability — who consistently plays up (min 10 rated games)',
+  chaosAgent:
+    'Player whose results the rating model predicts worst — average surprise per game (min 10 rated games)',
+  clutchRecord:
+    'Best record in deciding games of a best-of series, e.g. game 3 at 1-1 (min 5 deciders)',
+  comebackArtist: 'Most series wins after losing the first game',
+  bagels: 'Most 11-0 (or any shutout) games dealt',
   biggestRivalry: 'Pair of players with the most total matches between them',
   dominator:
     'Largest gap between wins and losses in any head-to-head matchup',
@@ -850,6 +863,151 @@ export default function Stats() {
           </StatCard>
         ) : (
           <NoData label="Highest Win Rate" tooltip={TIPS.highestWinRate} />
+        )}
+      </div>
+
+      {/* Probability */}
+      <h2 className="text-lg font-semibold mb-3">Against the Odds</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {stats.probability.giantSlayer ? (
+          <StatCard
+            label="Giant Slayer"
+            value={`+${stats.probability.giantSlayer.wae} wins`}
+            valueClass="text-yellow-400"
+            tooltip={TIPS.giantSlayer}
+          >
+            {stats.probability.giantSlayer.entries.map((e) => (
+              <div key={e.player.id}>
+                <PlayerLink player={e.player} />
+                <span className="text-slate-600">
+                  {' '}
+                  · +{e.wae} over {e.games} games
+                </span>
+              </div>
+            ))}
+          </StatCard>
+        ) : (
+          <NoData label="Giant Slayer" tooltip={TIPS.giantSlayer} />
+        )}
+
+        {stats.probability.mostImprobableStreak ? (
+          <StatCard
+            label="Most Improbable Streak"
+            value={`${(stats.probability.mostImprobableStreak.probability * 100).toFixed(1)}%`}
+            valueClass="text-yellow-400"
+            tooltip={TIPS.mostImprobableStreak}
+          >
+            <div>
+              <PlayerLink player={stats.probability.mostImprobableStreak.player} />
+              <span className="text-slate-600">
+                {' '}
+                · {stats.probability.mostImprobableStreak.count} straight ·{' '}
+                {formatDate(stats.probability.mostImprobableStreak.startDate)} –{' '}
+                {formatDate(stats.probability.mostImprobableStreak.endDate)}
+              </span>
+            </div>
+          </StatCard>
+        ) : (
+          <NoData label="Most Improbable Streak" tooltip={TIPS.mostImprobableStreak} />
+        )}
+
+        {stats.probability.upsetMagnet ? (
+          <StatCard
+            label="Upset Magnet"
+            value={String(stats.probability.upsetMagnet.count)}
+            valueClass="text-red-400"
+            tooltip={TIPS.upsetMagnet}
+          >
+            <PlayerLinks players={stats.probability.upsetMagnet.players} />
+          </StatCard>
+        ) : (
+          <NoData label="Upset Magnet" tooltip={TIPS.upsetMagnet} />
+        )}
+
+        {stats.probability.hardestSchedule ? (
+          <StatCard
+            label="Hardest Schedule"
+            value={`${Math.round(stats.probability.hardestSchedule.avgWinProb * 100)}% avg odds`}
+            tooltip={TIPS.hardestSchedule}
+          >
+            {stats.probability.hardestSchedule.entries.map((e) => (
+              <div key={e.player.id}>
+                <PlayerLink player={e.player} />
+                <span className="text-slate-600"> · {e.games} games</span>
+              </div>
+            ))}
+          </StatCard>
+        ) : (
+          <NoData label="Hardest Schedule" tooltip={TIPS.hardestSchedule} />
+        )}
+
+        {stats.probability.chaosAgent ? (
+          <StatCard
+            label="Chaos Agent"
+            value={stats.probability.chaosAgent.brier.toFixed(2)}
+            valueClass="text-purple-400"
+            tooltip={TIPS.chaosAgent}
+          >
+            {stats.probability.chaosAgent.entries.map((e) => (
+              <div key={e.player.id}>
+                <PlayerLink player={e.player} />
+                <span className="text-slate-600"> · {e.games} games</span>
+              </div>
+            ))}
+          </StatCard>
+        ) : (
+          <NoData label="Chaos Agent" tooltip={TIPS.chaosAgent} />
+        )}
+      </div>
+
+      {/* Clutch */}
+      <h2 className="text-lg font-semibold mb-3">Clutch</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {stats.clutch.clutchRecord ? (
+          <StatCard
+            label="Clutch Rating"
+            value={`${Math.round(stats.clutch.clutchRecord.rate * 100)}%`}
+            valueClass="text-emerald-400"
+            tooltip={TIPS.clutchRecord}
+          >
+            {stats.clutch.clutchRecord.entries.map((e) => (
+              <div key={e.player.id}>
+                <PlayerLink player={e.player} />
+                <span className="text-slate-600">
+                  {' '}
+                  · {e.wins}-{e.losses} in deciders
+                </span>
+              </div>
+            ))}
+          </StatCard>
+        ) : (
+          <NoData label="Clutch Rating" tooltip={TIPS.clutchRecord} />
+        )}
+
+        {stats.clutch.comebackArtist ? (
+          <StatCard
+            label="Comeback Artist"
+            value={String(stats.clutch.comebackArtist.count)}
+            valueClass="text-emerald-400"
+            tooltip={TIPS.comebackArtist}
+          >
+            <PlayerLinks players={stats.clutch.comebackArtist.players} />
+          </StatCard>
+        ) : (
+          <NoData label="Comeback Artist" tooltip={TIPS.comebackArtist} />
+        )}
+
+        {stats.clutch.bagels ? (
+          <StatCard
+            label="Bagels Dealt"
+            value={String(stats.clutch.bagels.count)}
+            valueClass="text-amber-400"
+            tooltip={TIPS.bagels}
+          >
+            <PlayerLinks players={stats.clutch.bagels.players} />
+          </StatCard>
+        ) : (
+          <NoData label="Bagels Dealt" tooltip={TIPS.bagels} />
         )}
       </div>
 

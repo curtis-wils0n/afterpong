@@ -440,6 +440,31 @@ export default function Docs() {
               <strong>Best defender</strong> — most challenge wins as the
               higher-ranked player.
             </StatGroup>
+            <StatGroup title="Against the odds">
+              <strong>Giant Slayer</strong> — career wins above expectation
+              (actual wins minus what the ratings predicted).
+              <br />
+              <strong>Most Improbable Streak</strong> — win streak (3+) with
+              the lowest combined probability.
+              <br />
+              <strong>Upset Magnet</strong> — most losses as the clear
+              favorite.
+              <br />
+              <strong>Hardest Schedule</strong> — lowest average pre-match win
+              probability.
+              <br />
+              <strong>Chaos Agent</strong> — player the rating model predicts
+              worst.
+            </StatGroup>
+            <StatGroup title="Clutch">
+              <strong>Clutch Rating</strong> — best record in deciding games
+              of best-of series.
+              <br />
+              <strong>Comeback Artist</strong> — most series wins after losing
+              game one.
+              <br />
+              <strong>Bagels Dealt</strong> — most shutout games.
+            </StatGroup>
             <StatGroup title="Rivalries">
               <strong>Biggest rivalry</strong> — the pair that has played the
               most matches.

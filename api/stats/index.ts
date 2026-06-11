@@ -60,8 +60,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     climbs: number;
     defenses: number;
     upsetsCaused: number;
+    upsetsSuffered: number;
     wins: number;
     losses: number;
+    // Probability stats (from pre-match snapshots)
+    probGames: number;
+    waeSum: number; // wins above expectation: sum of (actual - expected)
+    expectedSum: number; // sum of pre-match win probabilities
+    brierSum: number; // sum of (actual - expected)^2
+    currentWinStreakProb: number; // product of win probs in current streak
+    // Clutch stats (from per-game scores)
+    clutchWins: number;
+    clutchLosses: number;
+    comebacks: number;
+    bagels: number;
   };
 
   const acc = new Map<number, PlayerAcc>();
@@ -100,8 +112,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       climbs: 0,
       defenses: 0,
       upsetsCaused: 0,
+      upsetsSuffered: 0,
       wins: 0,
       losses: 0,
+      probGames: 0,
+      waeSum: 0,
+      expectedSum: 0,
+      brierSum: 0,
+      currentWinStreakProb: 1,
+      clutchWins: 0,
+      clutchLosses: 0,
+      comebacks: 0,
+      bagels: 0,
     });
     ratingHistory.set(p.id, [{ t: p.createdAt.toISOString(), rating: 1500 }]);
   }
@@ -114,6 +136,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let lowestUpsetOdds = Infinity;
   const biggestUpsetMatches: (typeof allMatches)[number][] = [];
+  let improbableStreak: {
+    playerId: number;
+    count: number;
+    probability: number;
+    startDate: string;
+    endDate: string;
+  } | null = null;
 
   // Single chronological pass
   for (const m of allMatches) {
@@ -134,6 +163,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       m.winnerRdBefore != null && m.winnerRdBefore <= PROVISIONAL_RD_CUTOFF;
     const loserCounted =
       m.loserRdBefore != null && m.loserRdBefore <= PROVISIONAL_RD_CUTOFF;
+
+    // Pre-match win probability for the winner (null for legacy rows
+    // without snapshots). Powers the probability stats below.
+    const winnerOdds =
+      m.winnerRatingBefore != null &&
+      m.winnerRdBefore != null &&
+      m.loserRatingBefore != null &&
+      m.loserRdBefore != null
+        ? expectedScore(
+            { rating: m.winnerRatingBefore, rd: m.winnerRdBefore },
+            { rating: m.loserRatingBefore, rd: m.loserRdBefore },
+          )
+        : null;
 
     const ts = m.createdAt.toISOString();
     ratingHistory.get(m.winnerId)!.push({ t: ts, rating: Math.round(winner.currentRating) });
@@ -190,6 +232,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (winner.currentWinStreak === 0) {
       winner.currentWinStreakStart = ts;
       winner.currentWinStreakMatches = [];
+      winner.currentWinStreakProb = 1;
     }
     winner.currentWinStreakMatches.push({
       opponentId: m.loserId,
@@ -198,6 +241,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       date: ts,
     });
     winner.currentWinStreak += 1;
+    winner.currentWinStreakProb *= winnerOdds ?? 1;
+    // Most improbable streak: lowest product of win probabilities across a
+    // streak of 3+ wins.
+    if (
+      winner.currentWinStreak >= 3 &&
+      (improbableStreak == null ||
+        winner.currentWinStreakProb < improbableStreak.probability)
+    ) {
+      improbableStreak = {
+        playerId: m.winnerId,
+        count: winner.currentWinStreak,
+        probability: winner.currentWinStreakProb,
+        startDate: winner.currentWinStreakStart ?? ts,
+        endDate: ts,
+      };
+    }
     if (winner.currentWinStreak > winner.longestWinStreak) {
       winner.longestWinStreak = winner.currentWinStreak;
       winner.longestWinStreakStart = winner.currentWinStreakStart;
@@ -228,10 +287,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     loser.currentWinStreak = 0;
     loser.currentWinStreakStart = null;
     loser.currentWinStreakMatches = [];
+    loser.currentWinStreakProb = 1;
 
-    // Upsets caused
+    // Upsets caused / suffered
     if (isUpset(m)) {
       winner.upsetsCaused += 1;
+      loser.upsetsSuffered += 1;
     }
 
     // Challenge ladder stats
@@ -250,22 +311,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Biggest upset: the win with the lowest pre-match win probability
     // (collect all matches tied at the minimum).
-    if (
-      m.winnerRatingBefore != null &&
-      m.winnerRdBefore != null &&
-      m.loserRatingBefore != null &&
-      m.loserRdBefore != null
-    ) {
-      const winnerOdds = expectedScore(
-        { rating: m.winnerRatingBefore, rd: m.winnerRdBefore },
-        { rating: m.loserRatingBefore, rd: m.loserRdBefore },
-      );
+    if (winnerOdds != null) {
       if (winnerOdds < lowestUpsetOdds - 1e-9) {
         lowestUpsetOdds = winnerOdds;
         biggestUpsetMatches.length = 0;
         biggestUpsetMatches.push(m);
       } else if (Math.abs(winnerOdds - lowestUpsetOdds) <= 1e-9) {
         biggestUpsetMatches.push(m);
+      }
+
+      // Probability accumulators. The Brier surprise of a match is the same
+      // for both players: (1 - winner's odds)^2.
+      const surprise = (1 - winnerOdds) ** 2;
+      winner.probGames += 1;
+      winner.waeSum += 1 - winnerOdds;
+      winner.expectedSum += winnerOdds;
+      winner.brierSum += surprise;
+      loser.probGames += 1;
+      loser.waeSum -= 1 - winnerOdds;
+      loser.expectedSum += 1 - winnerOdds;
+      loser.brierSum += surprise;
+    }
+
+    // Clutch stats from per-game scores.
+    if (Array.isArray(m.games) && m.games.length > 0) {
+      const wonByWinner = m.games.filter(
+        (g) => g.winnerScore > g.loserScore,
+      ).length;
+      const wonByLoser = m.games.length - wonByWinner;
+      // Decider: a 3+ game series settled by a single game (2-1, 3-2, ...).
+      if (m.games.length >= 3 && wonByWinner - wonByLoser === 1) {
+        winner.clutchWins += 1;
+        loser.clutchLosses += 1;
+      }
+      // Comeback: dropped the first game, won the series.
+      if (m.games.length >= 2 && m.games[0].winnerScore < m.games[0].loserScore) {
+        winner.comebacks += 1;
+      }
+      for (const g of m.games) {
+        if (g.winnerScore > g.loserScore && g.loserScore === 0) {
+          winner.bagels += 1;
+        } else if (g.loserScore > g.winnerScore && g.winnerScore === 0) {
+          loser.bagels += 1;
+        }
       }
     }
 
@@ -391,8 +479,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const peak = pickAllMax(playerList, (p) => acc.get(p.id)!.peakRating ?? -Infinity);
   const currentTop = pickAllMax(playerList, (p) => acc.get(p.id)!.currentRating);
   // Win-rate stat requires a minimum match count so a single lucky win
-  // doesn't crown someone at 100%.
+  // doesn't crown someone at 100%. Probability stats share the threshold.
   const MIN_WIN_RATE_MATCHES = 10;
+  const MIN_CLUTCH_DECIDERS = 5;
+
+  const giantSlayer = pickAllMax(playerList, (p) => {
+    const a = acc.get(p.id)!;
+    return a.probGames >= MIN_WIN_RATE_MATCHES ? a.waeSum : -Infinity;
+  });
+  const upsetMagnet = pickAllMax(playerList, (p) => acc.get(p.id)!.upsetsSuffered);
+  // Hardest schedule = lowest average pre-match win probability; negate so
+  // pickAllMax finds the minimum.
+  const hardestSchedule = pickAllMax(playerList, (p) => {
+    const a = acc.get(p.id)!;
+    return a.probGames >= MIN_WIN_RATE_MATCHES
+      ? -(a.expectedSum / a.probGames)
+      : -Infinity;
+  });
+  const chaosAgent = pickAllMax(playerList, (p) => {
+    const a = acc.get(p.id)!;
+    return a.probGames >= MIN_WIN_RATE_MATCHES
+      ? a.brierSum / a.probGames
+      : -Infinity;
+  });
+  const clutchRecord = pickAllMax(playerList, (p) => {
+    const a = acc.get(p.id)!;
+    const deciders = a.clutchWins + a.clutchLosses;
+    return deciders >= MIN_CLUTCH_DECIDERS ? a.clutchWins / deciders : -Infinity;
+  });
+  const comebackArtist = pickAllMax(playerList, (p) => acc.get(p.id)!.comebacks);
+  const bagels = pickAllMax(playerList, (p) => acc.get(p.id)!.bagels);
   const highWinRate = pickAllMax(playerList, (p) => {
     const a = acc.get(p.id)!;
     const total = a.wins + a.losses;
@@ -751,6 +867,64 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       biggestRivalry,
       dominator,
       tightestRivalry,
+    },
+    probability: {
+      giantSlayer:
+        giantSlayer && Number.isFinite(giantSlayer.score) && giantSlayer.score > 0
+          ? {
+              entries: giantSlayer.players.map((pl) => ({
+                player: pl,
+                wae: Math.round(acc.get(pl.id)!.waeSum * 10) / 10,
+                games: acc.get(pl.id)!.probGames,
+              })),
+              wae: Math.round(giantSlayer.score * 10) / 10,
+            }
+          : null,
+      mostImprobableStreak: improbableStreak
+        ? {
+            player: getRef(improbableStreak.playerId),
+            count: improbableStreak.count,
+            probability: improbableStreak.probability,
+            startDate: improbableStreak.startDate,
+            endDate: improbableStreak.endDate,
+          }
+        : null,
+      upsetMagnet: wrapCount(upsetMagnet),
+      hardestSchedule:
+        hardestSchedule && Number.isFinite(hardestSchedule.score)
+          ? {
+              entries: hardestSchedule.players.map((pl) => ({
+                player: pl,
+                games: acc.get(pl.id)!.probGames,
+              })),
+              avgWinProb: -hardestSchedule.score,
+            }
+          : null,
+      chaosAgent:
+        chaosAgent && Number.isFinite(chaosAgent.score)
+          ? {
+              entries: chaosAgent.players.map((pl) => ({
+                player: pl,
+                games: acc.get(pl.id)!.probGames,
+              })),
+              brier: chaosAgent.score,
+            }
+          : null,
+    },
+    clutch: {
+      clutchRecord:
+        clutchRecord && Number.isFinite(clutchRecord.score)
+          ? {
+              entries: clutchRecord.players.map((pl) => ({
+                player: pl,
+                wins: acc.get(pl.id)!.clutchWins,
+                losses: acc.get(pl.id)!.clutchLosses,
+              })),
+              rate: clutchRecord.score,
+            }
+          : null,
+      comebackArtist: wrapCount(comebackArtist),
+      bagels: wrapCount(bagels),
     },
     relationships: {
       // Most matches played together first.
