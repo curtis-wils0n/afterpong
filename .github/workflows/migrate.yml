@@ -1,0 +1,78 @@
+name: Migrate
+
+# Applies database migrations from CI rather than the Vercel build: build
+# containers get the wrong DB URL on preview deploys and swallow build logs,
+# and this keeps a visible migration log per change.
+#
+# - Pushes to main migrate the production database.
+# - Successful preview deployments migrate that branch's Neon preview
+#   database (created by the Vercel-Neon integration as preview/<git-branch>).
+#   Triggering on deployment_status instead of pull_request makes the Neon
+#   branch's existence a real dependency: the integration provisions it when
+#   the build starts, so a successful deployment guarantees it exists.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'drizzle/**'
+      - 'drizzle.config.ts'
+      - '.github/workflows/migrate.yml'
+  deployment_status:
+  workflow_dispatch:
+
+jobs:
+  migrate-production:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx drizzle-kit migrate
+        env:
+          STORAGE_DATABASE_URL: ${{ secrets.STORAGE_DATABASE_URL }}
+
+  migrate-preview:
+    if: >-
+      github.event_name == 'deployment_status' &&
+      github.event.deployment_status.state == 'success' &&
+      github.event.deployment.environment == 'Preview' &&
+      github.event.deployment.ref != 'main'
+    runs-on: ubuntu-latest
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+      NEON_BRANCH: preview/${{ github.event.deployment.ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.deployment.sha }}
+          fetch-depth: 0
+      # deployment_status can't be path-filtered, so skip cheaply when the
+      # deployed branch doesn't change any migrations.
+      - name: Check for migration changes
+        id: changes
+        run: |
+          git fetch origin main --quiet
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD -- drizzle/ drizzle.config.ts | grep -q .; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No migration changes; skipping."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@v4
+        if: steps.changes.outputs.changed == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        if: steps.changes.outputs.changed == 'true'
+      - name: Migrate preview branch
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          STORAGE_DATABASE_URL="$(npx neonctl connection-string "$NEON_BRANCH" --project-id "$NEON_PROJECT_ID")"
+          export STORAGE_DATABASE_URL
+          npx drizzle-kit migrate
