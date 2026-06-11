@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { isUpset, expectedScore, conservativeRating } from '../../lib/glicko';
 import { hasPointScores } from '../../lib/games';
+import { niceAxis } from '../lib/chart';
 import {
   computeNemesis,
   computeRival,
@@ -137,6 +138,13 @@ export default function PlayerProfile() {
     return points;
   })();
 
+  const yAxis = (() => {
+    const values = ratingHistory.flatMap((pt) =>
+      pt.band ? [pt.band[0], pt.band[1]] : [pt.rating],
+    );
+    return niceAxis(Math.min(...values), Math.max(...values));
+  })();
+
   const peakRating = ratingHistory.length > 0
     ? Math.max(...ratingHistory.map((p) => p.rating))
     : null;
@@ -259,7 +267,8 @@ export default function PlayerProfile() {
             <ComposedChart data={ratingHistory}>
               <XAxis dataKey="label" hide />
               <YAxis
-                domain={['dataMin - 20', 'dataMax + 20']}
+                domain={yAxis.domain}
+                ticks={yAxis.ticks}
                 tick={{ fill: '#64748b', fontSize: 12 }}
                 width={40}
                 axisLine={false}

@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 import { api } from '../lib/api';
 import Tooltip from './Tooltip';
+import { niceAxis } from '../lib/chart';
 import type {
   StatsResponse,
   PlayerRef,
@@ -450,11 +451,11 @@ function RatingHistoryChart({
     });
   }, [visibleSeries, dayKeys]);
 
-  const yDomain = useMemo(() => {
+  const yAxis = useMemo(() => {
     const ratingVals: number[] = [];
     for (const s of visibleSeries) for (const pt of s.data) ratingVals.push(pt.rating);
-    if (ratingVals.length === 0) return [1480, 1520] as [number, number];
-    return [Math.min(...ratingVals) - 20, Math.max(...ratingVals) + 20] as [number, number];
+    if (ratingVals.length === 0) return niceAxis(1480, 1520);
+    return niceAxis(Math.min(...ratingVals), Math.max(...ratingVals));
   }, [visibleSeries]);
 
   // Colors are stable per legend slot regardless of which lines are hidden.
@@ -521,7 +522,8 @@ function RatingHistoryChart({
                   tickLine={false}
                 />
                 <YAxis
-                  domain={yDomain}
+                  domain={yAxis.domain}
+                  ticks={yAxis.ticks}
                   tick={{ fill: '#64748b', fontSize: 12 }}
                   width={48}
                   axisLine={false}
