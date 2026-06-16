@@ -199,9 +199,13 @@ function StreakMatchList({
           <span className="text-slate-600">vs</span>
           <span className="text-slate-300 truncate">{m.opponent.name}</span>
           <span className="ml-auto flex items-center gap-2">
-            {m.playerScore != null && m.opponentScore != null && (
+            {m.playerScore != null && m.opponentScore != null ? (
               <span className={`tabular-nums ${scoreClass(m)}`}>
                 {m.playerScore}-{m.opponentScore}
+              </span>
+            ) : (
+              <span className={`font-bold ${scoreClass(m)}`}>
+                {(m.won ?? isWin) ? 'W' : 'L'}
               </span>
             )}
             {showOdds && m.winProb != null && (
