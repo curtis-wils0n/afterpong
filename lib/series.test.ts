@@ -19,6 +19,19 @@ describe('inProgressGameProbability', () => {
       6,
     );
   });
+
+  it('respects win-by-2 deuce: the lead matters, not just points-to-go', () => {
+    // To 21, even players: a tie is a coin flip, but one point up/down swings
+    // it hard — the bug was 20-21 reading the same as 20-20.
+    expect(inProgressGameProbability(20, 20, 21, 0.5)).toBeCloseTo(0.5, 6);
+    expect(inProgressGameProbability(21, 20, 21, 0.5)).toBeCloseTo(0.75, 6);
+    expect(inProgressGameProbability(20, 21, 21, 0.5)).toBeCloseTo(0.25, 6);
+    expect(inProgressGameProbability(20, 21, 21, 0.5)).toBeLessThan(
+      inProgressGameProbability(20, 20, 21, 0.5),
+    );
+    // A two-point lead at or above target is a finished game.
+    expect(inProgressGameProbability(22, 20, 21, 0.5)).toBe(1);
+  });
 });
 
 describe('seriesWinProbability', () => {
