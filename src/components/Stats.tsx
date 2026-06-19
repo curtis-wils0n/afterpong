@@ -190,8 +190,9 @@ function StreakMatchList({
   isWin: boolean;
   showOdds?: boolean;
 }) {
+  const won = (m: StreakMatch) => m.won ?? isWin;
   const scoreClass = (m: StreakMatch) =>
-    (m.won ?? isWin) ? 'text-emerald-400' : 'text-red-400';
+    won(m) ? 'text-emerald-400' : 'text-red-400';
   return (
     <div className="flex flex-col gap-1">
       {matches.map((m, i) => (
@@ -199,9 +200,20 @@ function StreakMatchList({
           <span className="text-slate-600">vs</span>
           <span className="text-slate-300 truncate">{m.opponent.name}</span>
           <span className="ml-auto flex items-center gap-2">
-            {m.playerScore != null && m.opponentScore != null && (
+            {m.playerScore != null && m.opponentScore != null ? (
               <span className={`tabular-nums ${scoreClass(m)}`}>
                 {m.playerScore}-{m.opponentScore}
+              </span>
+            ) : (
+              // Scoreless games carry no points — show the W/L instead.
+              <span
+                className={`text-[10px] font-bold px-1 py-0.5 rounded ${
+                  won(m)
+                    ? 'bg-emerald-500/20 text-emerald-400'
+                    : 'bg-red-500/20 text-red-400'
+                }`}
+              >
+                {won(m) ? 'W' : 'L'}
               </span>
             )}
             {showOdds && m.winProb != null && (
