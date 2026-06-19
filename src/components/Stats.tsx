@@ -738,7 +738,11 @@ export default function Stats() {
         {stats.players.biggestDailyClimber ? (
           <StatCard
             label="Biggest Single-Day Climb"
-            value={`+${stats.players.biggestDailyClimber.climb}`}
+            value={
+              <DetailValue entries={stats.players.biggestDailyClimber.entries}>
+                +{stats.players.biggestDailyClimber.climb}
+              </DetailValue>
+            }
             valueClass="text-emerald-400"
             tooltip={TIPS.biggestDailyClimber}
           >
@@ -762,7 +766,11 @@ export default function Stats() {
         {stats.players.biggestDailyFaller ? (
           <StatCard
             label="Biggest Single-Day Fall"
-            value={`-${stats.players.biggestDailyFaller.fall}`}
+            value={
+              <DetailValue entries={stats.players.biggestDailyFaller.entries}>
+                -{stats.players.biggestDailyFaller.fall}
+              </DetailValue>
+            }
             valueClass="text-red-400"
             tooltip={TIPS.biggestDailyFaller}
           >
@@ -885,11 +893,20 @@ export default function Stats() {
         {stats.matches.mostUpsetsCaused ? (
           <StatCard
             label="Most Upsets Caused"
-            value={String(stats.matches.mostUpsetsCaused.count)}
+            value={
+              <DetailValue
+                entries={stats.matches.mostUpsetsCaused.entries}
+                showOdds
+              >
+                {stats.matches.mostUpsetsCaused.count}
+              </DetailValue>
+            }
             valueClass="text-yellow-400"
             tooltip={TIPS.mostUpsetsCaused}
           >
-            <PlayerLinks players={stats.matches.mostUpsetsCaused.players} />
+            <PlayerLinks
+              players={stats.matches.mostUpsetsCaused.entries.map((e) => e.player)}
+            />
           </StatCard>
         ) : (
           <NoData label="Most Upsets Caused" tooltip={TIPS.mostUpsetsCaused} />
@@ -1133,11 +1150,19 @@ export default function Stats() {
         {stats.ladder.mostSuccessfulClimbs ? (
           <StatCard
             label="Most Successful Climbs"
-            value={String(stats.ladder.mostSuccessfulClimbs.count)}
+            value={
+              <DetailValue entries={stats.ladder.mostSuccessfulClimbs.entries}>
+                {stats.ladder.mostSuccessfulClimbs.count}
+              </DetailValue>
+            }
             valueClass="text-emerald-400"
             tooltip={TIPS.mostSuccessfulClimbs}
           >
-            <PlayerLinks players={stats.ladder.mostSuccessfulClimbs.players} />
+            <PlayerLinks
+              players={stats.ladder.mostSuccessfulClimbs.entries.map(
+                (e) => e.player,
+              )}
+            />
           </StatCard>
         ) : (
           <NoData
@@ -1149,11 +1174,17 @@ export default function Stats() {
         {stats.ladder.bestDefender ? (
           <StatCard
             label="Best Defender"
-            value={String(stats.ladder.bestDefender.count)}
+            value={
+              <DetailValue entries={stats.ladder.bestDefender.entries}>
+                {stats.ladder.bestDefender.count}
+              </DetailValue>
+            }
             valueClass="text-sky-400"
             tooltip={TIPS.bestDefender}
           >
-            <PlayerLinks players={stats.ladder.bestDefender.players} />
+            <PlayerLinks
+              players={stats.ladder.bestDefender.entries.map((e) => e.player)}
+            />
           </StatCard>
         ) : (
           <NoData label="Best Defender" tooltip={TIPS.bestDefender} />

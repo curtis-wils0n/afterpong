@@ -554,6 +554,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const matchesOf = (pid: number) =>
     allMatches.filter((m) => m.winnerId === pid || m.loserId === pid);
 
+  // The upset wins behind a Most Upsets Caused count, biggest underdog
+  // (lowest own odds) first.
+  const upsetWinsFor = (pid: number): DetailMatch[] =>
+    matchesOf(pid)
+      .filter((m) => m.winnerId === pid && isUpset(m))
+      .map((m) => detailFromMatch(m, pid))
+      .sort((a, b) => (a.winProb ?? 1) - (b.winProb ?? 1))
+      .slice(0, DETAIL_CAP);
+
+  // Challenge wins as the lower-ranked challenger (the climbs).
+  const climbWinsFor = (pid: number): DetailMatch[] =>
+    matchesOf(pid)
+      .filter(
+        (m) =>
+          m.winnerId === pid &&
+          m.isChallenge &&
+          m.winnerRankBefore != null &&
+          m.loserRankBefore != null &&
+          m.winnerRankBefore > m.loserRankBefore,
+      )
+      .map((m) => detailFromMatch(m, pid))
+      .slice(-DETAIL_CAP);
+
+  // Challenge wins as the higher-ranked defender.
+  const defenseWinsFor = (pid: number): DetailMatch[] =>
+    matchesOf(pid)
+      .filter(
+        (m) =>
+          m.winnerId === pid &&
+          m.isChallenge &&
+          m.winnerRankBefore != null &&
+          m.loserRankBefore != null &&
+          m.winnerRankBefore <= m.loserRankBefore,
+      )
+      .map((m) => detailFromMatch(m, pid))
+      .slice(-DETAIL_CAP);
+
+  // Every match a player played on one Mountain-time day, chronological —
+  // the games behind a single-day climb/fall swing.
+  const matchesOnDayFor = (pid: number, day: string): DetailMatch[] =>
+    matchesOf(pid)
+      .filter((m) => mtDayFmt.format(m.createdAt) === day)
+      .map((m) => detailFromMatch(m, pid));
+
   // Upset losses, most embarrassing (highest own odds) first.
   const upsetLossesFor = (pid: number): DetailMatch[] =>
     matchesOf(pid)
@@ -670,6 +714,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     day: string;
     from: number;
     to: number;
+    matches: DetailMatch[];
   };
   let bestDailyClimb = 0;
   const dailyClimbEntries: DailyEntry[] = [];
@@ -687,6 +732,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             day: d.day,
             from: Math.round(d.startRating),
             to: Math.round(d.endRating),
+            matches: matchesOnDayFor(pid, d.day),
           });
         } else if (delta === bestDailyClimb) {
           dailyClimbEntries.push({
@@ -694,6 +740,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             day: d.day,
             from: Math.round(d.startRating),
             to: Math.round(d.endRating),
+            matches: matchesOnDayFor(pid, d.day),
           });
         }
       } else if (delta < 0) {
@@ -706,6 +753,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             day: d.day,
             from: Math.round(d.startRating),
             to: Math.round(d.endRating),
+            matches: matchesOnDayFor(pid, d.day),
           });
         } else if (fall === bestDailyFall) {
           dailyFallEntries.push({
@@ -713,6 +761,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             day: d.day,
             from: Math.round(d.startRating),
             to: Math.round(d.endRating),
+            matches: matchesOnDayFor(pid, d.day),
           });
         }
       }
@@ -825,12 +874,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       : null;
 
-  // Wrap multi-player count stats (null when score is 0)
-  const wrapCount = (
+  // Wrap multi-player count stats with each winner's matches behind the count
+  // for a hover detail list (null when score is 0).
+  const wrapCountMatches = (
     best: { players: PlayerRef[]; score: number } | null,
-  ): { players: PlayerRef[]; count: number } | null => {
+    matchesFor: (pid: number) => DetailMatch[],
+  ): {
+    entries: { player: PlayerRef; matches: DetailMatch[] }[];
+    count: number;
+  } | null => {
     if (!best || best.score <= 0) return null;
-    return { players: best.players, count: best.score };
+    return {
+      entries: best.players.map((pl) => ({
+        player: pl,
+        matches: matchesFor(pl.id),
+      })),
+      count: best.score,
+    };
   };
 
   type StreakKind = 'currentWin' | 'longestWin' | 'currentLoss' | 'longestLoss';
@@ -948,7 +1008,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               winnerOdds: lowestUpsetOdds,
             }
           : null,
-      mostUpsetsCaused: wrapCount(mostUpsets),
+      mostUpsetsCaused: wrapCountMatches(mostUpsets, upsetWinsFor),
       highestWinRate:
         highWinRate && highWinRate.score >= 0
           ? {
@@ -1002,8 +1062,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       biggestDailyFaller,
     },
     ladder: {
-      mostSuccessfulClimbs: wrapCount(mostClimbs),
-      bestDefender: wrapCount(bestDefender),
+      mostSuccessfulClimbs: wrapCountMatches(mostClimbs, climbWinsFor),
+      bestDefender: wrapCountMatches(bestDefender, defenseWinsFor),
     },
     rivalries: {
       biggestRivalry,
