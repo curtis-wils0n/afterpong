@@ -129,7 +129,10 @@ export interface StatsResponse {
       }[];
       winnerOdds: number;
     } | null;
-    mostUpsetsCaused: { players: PlayerRef[]; count: number } | null;
+    mostUpsetsCaused: {
+      entries: { player: PlayerRef; matches: StreakMatch[] }[];
+      count: number;
+    } | null;
     highestWinRate: {
       entries: { player: PlayerRef; wins: number; losses: number }[];
       rate: number;
@@ -147,17 +150,35 @@ export interface StatsResponse {
       fall: number;
     } | null;
     biggestDailyClimber: {
-      entries: { player: PlayerRef; day: string; from: number; to: number }[];
+      entries: {
+        player: PlayerRef;
+        day: string;
+        from: number;
+        to: number;
+        matches: StreakMatch[];
+      }[];
       climb: number;
     } | null;
     biggestDailyFaller: {
-      entries: { player: PlayerRef; day: string; from: number; to: number }[];
+      entries: {
+        player: PlayerRef;
+        day: string;
+        from: number;
+        to: number;
+        matches: StreakMatch[];
+      }[];
       fall: number;
     } | null;
   };
   ladder: {
-    mostSuccessfulClimbs: { players: PlayerRef[]; count: number } | null;
-    bestDefender: { players: PlayerRef[]; count: number } | null;
+    mostSuccessfulClimbs: {
+      entries: { player: PlayerRef; matches: StreakMatch[] }[];
+      count: number;
+    } | null;
+    bestDefender: {
+      entries: { player: PlayerRef; matches: StreakMatch[] }[];
+      count: number;
+    } | null;
   };
   rivalries: {
     biggestRivalry: {
