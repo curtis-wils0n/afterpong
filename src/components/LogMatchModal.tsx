@@ -1,7 +1,28 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import { expectedScore } from '../../lib/glicko';
+import {
+  inProgressGameProbability,
+  seriesWinProbability,
+} from '../../lib/series';
 import type { Player } from '../types';
+
+// Game targets the modal can score to.
+const GAME_TARGETS = [11, 21] as const;
+
+// Winner of a single game under first-to-`target`, win-by-2 rules, or null if
+// the game isn't decided yet (still in progress, or a deuce that hasn't broken
+// by two). Empty inputs come in as 0.
+function gameWinnerByTarget(
+  s1: number,
+  s2: number,
+  target: number,
+): 1 | 2 | null {
+  if (Math.max(s1, s2) >= target && Math.abs(s1 - s2) >= 2) {
+    return s1 > s2 ? 1 : 2;
+  }
+  return null;
+}
 
 interface Props {
   players: Player[];
@@ -41,6 +62,8 @@ export default function LogMatchModal({
     scorelessWinner: null,
   });
   const [gameScores, setGameScores] = useState<GameRow[]>([emptyRow()]);
+  // Points per game; drives game-complete detection and the live odds.
+  const [gameTarget, setGameTarget] = useState<number>(11);
   // When off, games are logged without point scores: each game just records
   // who won it.
   const [trackPoints, setTrackPoints] = useState(true);
@@ -63,14 +86,24 @@ export default function LogMatchModal({
       e.preventDefault();
       const field = e.key === 'ArrowLeft' ? 'player1Score' : 'player2Score';
       setGameScores((prev) => {
+        // Score into the current game: the first one not yet decided. Once a
+        // game reaches the target, points roll onto the next game.
+        const idx = prev.findIndex(
+          (g) =>
+            gameWinnerByTarget(
+              Number(g.player1Score) || 0,
+              Number(g.player2Score) || 0,
+              gameTarget,
+            ) === null,
+        );
+        if (idx === -1) return prev;
         const updated = [...prev];
-        const lastIdx = updated.length - 1;
-        const current = Number(updated[lastIdx][field]) || 0;
-        updated[lastIdx] = { ...updated[lastIdx], [field]: String(current + 1) };
+        const current = Number(updated[idx][field]) || 0;
+        updated[idx] = { ...updated[idx], [field]: String(current + 1) };
         return updated;
       });
     },
-    [player1Id, player2Id, trackPoints],
+    [player1Id, player2Id, trackPoints, gameTarget],
   );
 
   useEffect(() => {
@@ -96,22 +129,23 @@ export default function LogMatchModal({
   const player1 = players.find((p) => p.id === player1Id);
   const player2 = players.find((p) => p.id === player2Id);
 
+  // A game's winner (1, 2, or null if undecided). In points mode a game is
+  // won by reaching the target; in scoreless mode it's whoever was tapped.
+  const outcomeOf = (g: GameRow): 1 | 2 | null =>
+    trackPoints
+      ? gameWinnerByTarget(
+          Number(g.player1Score) || 0,
+          Number(g.player2Score) || 0,
+          gameTarget,
+        )
+      : g.scorelessWinner;
+
   // Count games won by each player
-  const filledGames = gameScores.filter((g) =>
-    trackPoints
-      ? g.player1Score !== '' && g.player2Score !== ''
-      : g.scorelessWinner != null,
-  );
-  const p1Wins = filledGames.filter((g) =>
-    trackPoints
-      ? Number(g.player1Score) > Number(g.player2Score)
-      : g.scorelessWinner === 1,
-  ).length;
-  const p2Wins = filledGames.filter((g) =>
-    trackPoints
-      ? Number(g.player2Score) > Number(g.player1Score)
-      : g.scorelessWinner === 2,
-  ).length;
+  const decidedGames = gameScores.filter((g) => outcomeOf(g) !== null);
+  const p1Wins = gameScores.filter((g) => outcomeOf(g) === 1).length;
+  const p2Wins = gameScores.filter((g) => outcomeOf(g) === 2).length;
+  // The game points currently land in — first undecided row.
+  const currentGameIndex = gameScores.findIndex((g) => outcomeOf(g) === null);
 
   const winnerId = p1Wins > p2Wins ? player1Id : p2Wins > p1Wins ? player2Id : null;
   const loserId = winnerId === player1Id ? player2Id : winnerId === player2Id ? player1Id : null;
@@ -126,6 +160,15 @@ export default function LogMatchModal({
 
   const addGame = () => {
     setGameScores([...gameScores, emptyRow()]);
+  };
+
+  // Pad out to a best-of-3 so the common case is one click, not two.
+  const setBestOfThree = () => {
+    setGameScores((prev) =>
+      prev.length >= 3
+        ? prev
+        : [...prev, ...Array.from({ length: 3 - prev.length }, emptyRow)],
+    );
   };
 
   const removeGame = (index: number) => {
@@ -182,7 +225,7 @@ export default function LogMatchModal({
     try {
       // Map games from player1/player2 to winner/loser perspective. Scoreless
       // games carry no points — just who won each game.
-      const games = filledGames.map((g) => {
+      const games = decidedGames.map((g) => {
         if (!trackPoints) {
           const gameWinner = g.scorelessWinner === 1 ? player1Id : player2Id;
           return {
@@ -309,10 +352,29 @@ export default function LogMatchModal({
                 </span>
               </div>
               {(() => {
-                const p1Odds = Math.round(expectedScore(player1, player2) * 100);
+                // Live series odds: decided games are locked in, the game in
+                // progress is run as a point race, and games not yet started
+                // use the flat per-game odds.
+                const p = expectedScore(player1, player2);
+                const needed = Math.floor(gameScores.length / 2) + 1;
+                const undecidedProbs = gameScores
+                  .filter((g) => outcomeOf(g) === null)
+                  .map((g) => {
+                    const s1 = Number(g.player1Score) || 0;
+                    const s2 = Number(g.player2Score) || 0;
+                    return trackPoints && (s1 > 0 || s2 > 0)
+                      ? inProgressGameProbability(s1, s2, gameTarget, p)
+                      : p;
+                  });
+                const p1Odds = Math.round(
+                  seriesWinProbability(p1Wins, p2Wins, undecidedProbs, needed) *
+                    100,
+                );
+                const label = gameScores.length > 1 ? 'series odds' : 'win odds';
                 return (
                   <p className="text-xs text-slate-500 mt-1 tabular-nums">
-                    win odds: <span className="text-slate-300">{p1Odds}%</span>
+                    {label}:{' '}
+                    <span className="text-slate-300">{p1Odds}%</span>
                     <span className="text-slate-600"> — </span>
                     <span className="text-slate-300">{100 - p1Odds}%</span>
                   </p>
@@ -333,7 +395,7 @@ export default function LogMatchModal({
                 <label className="text-sm text-slate-400">
                   {trackPoints ? 'Game Scores' : 'Games'}
                 </label>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap justify-end">
                   <button
                     type="button"
                     onClick={toggleTrackPoints}
@@ -344,6 +406,31 @@ export default function LogMatchModal({
                     }`}
                   >
                     {trackPoints ? 'Points: on' : 'Points: off'}
+                  </button>
+                  {trackPoints && (
+                    <div className="flex rounded overflow-hidden border border-slate-600 text-xs">
+                      {GAME_TARGETS.map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setGameTarget(t)}
+                          className={`px-2 py-1 transition-colors ${
+                            gameTarget === t
+                              ? 'bg-emerald-500/20 text-emerald-300'
+                              : 'text-slate-400 hover:bg-slate-700'
+                          }`}
+                        >
+                          to {t}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={setBestOfThree}
+                    className="text-xs text-slate-400 hover:text-slate-200 bg-slate-700/60 hover:bg-slate-700 px-2 py-1 rounded transition-colors"
+                  >
+                    Best of 3
                   </button>
                   <button
                     type="button"
@@ -370,23 +457,19 @@ export default function LogMatchModal({
               )}
               <div className="space-y-2">
                 {gameScores.map((game, index) => {
-                  const p1 = Number(game.player1Score);
-                  const p2 = Number(game.player2Score);
-                  const gameComplete =
-                    game.player1Score !== '' && game.player2Score !== '';
-                  const p1Won = trackPoints
-                    ? gameComplete && p1 > p2
-                    : game.scorelessWinner === 1;
-                  const p2Won = trackPoints
-                    ? gameComplete && p2 > p1
-                    : game.scorelessWinner === 2;
+                  const outcome = outcomeOf(game);
+                  const p1Won = outcome === 1;
+                  const p2Won = outcome === 2;
+                  // First undecided game: where points are landing right now.
+                  const isCurrent = trackPoints && index === currentGameIndex;
+                  const gameLabelClass = `text-xs w-6 shrink-0 ${
+                    isCurrent ? 'text-emerald-400 font-semibold' : 'text-slate-500'
+                  }`;
 
                   if (!trackPoints) {
                     return (
                       <div key={index} className="flex items-center gap-2">
-                        <span className="text-xs text-slate-500 w-6 shrink-0">
-                          G{index + 1}
-                        </span>
+                        <span className={gameLabelClass}>G{index + 1}</span>
                         <button
                           type="button"
                           onClick={() => setGameWinner(index, 1)}
@@ -425,9 +508,7 @@ export default function LogMatchModal({
 
                   return (
                     <div key={index} className="flex items-center gap-2">
-                      <span className="text-xs text-slate-500 w-6 shrink-0">
-                        G{index + 1}
-                      </span>
+                      <span className={gameLabelClass}>G{index + 1}</span>
                       <input
                         type="number"
                         min="0"
