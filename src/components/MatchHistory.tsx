@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -23,8 +23,10 @@ export default function MatchHistory() {
   const [total, setTotal] = useState(0);
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [undoing, setUndoing] = useState(false);
-  const [page, setPage] = useState(0);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [showLogMatch, setShowLogMatch] = useState(false);
   const [filter1, setFilter1] = useState<number | ''>('');
   const [filter2, setFilter2] = useState<number | ''>('');
 
@@ -36,17 +38,19 @@ export default function MatchHistory() {
   }, [filter1, filter2]);
 
   const isFiltered = filterIds.length > 0;
+  const hasMore = matches.length < total;
 
   useEffect(() => {
     api.players.list().then(setPlayers).catch(console.error);
   }, []);
 
-  const fetchMatches = () => {
+  // Load (or reload) the first page whenever the filters change.
+  useEffect(() => {
     setLoading(true);
     api.matches
       .list({
         limit: PAGE_SIZE,
-        offset: page * PAGE_SIZE,
+        offset: 0,
         playerIds: filterIds.length > 0 ? filterIds : undefined,
       })
       .then((res) => {
@@ -55,20 +59,60 @@ export default function MatchHistory() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    fetchMatches();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, filter1, filter2]);
-
-  // Reset to page 0 when filters change
-  useEffect(() => {
-    setPage(0);
   }, [filter1, filter2]);
 
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [showLogMatch, setShowLogMatch] = useState(false);
+  const loadMore = () => {
+    if (loading || loadingMore) return;
+    const offset = matches.length;
+    setLoadingMore(true);
+    api.matches
+      .list({
+        limit: PAGE_SIZE,
+        offset,
+        playerIds: filterIds.length > 0 ? filterIds : undefined,
+      })
+      .then((res) => {
+        setMatches((prev) => [...prev, ...res.matches]);
+        // Guard against a stale/over-counted total looping the observer forever.
+        setTotal(res.matches.length === 0 ? offset : res.total);
+      })
+      .catch(console.error)
+      .finally(() => setLoadingMore(false));
+  };
+
+  // Quietly re-fetch the rows we've already loaded (preserving scroll depth)
+  // after a mutation that changes the list.
+  const reload = () => {
+    const count = Math.max(PAGE_SIZE, matches.length);
+    api.matches
+      .list({
+        limit: count,
+        offset: 0,
+        playerIds: filterIds.length > 0 ? filterIds : undefined,
+      })
+      .then((res) => {
+        setMatches(res.matches);
+        setTotal(res.total);
+      })
+      .catch(console.error);
+  };
+
+  // Infinite scroll: load the next page as the sentinel nears the viewport.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) loadMore();
+      },
+      { rootMargin: '300px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMore, loading, loadingMore, matches.length, filterIds]);
 
   const handleDelete = async (match: Match) => {
     if (
@@ -81,7 +125,7 @@ export default function MatchHistory() {
     setDeletingId(match.id);
     try {
       await api.matches.delete(match.id);
-      fetchMatches();
+      reload();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to delete match');
     } finally {
@@ -94,7 +138,7 @@ export default function MatchHistory() {
     setUndoing(true);
     try {
       await api.matches.deleteLast();
-      fetchMatches();
+      reload();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to undo match');
     } finally {
@@ -112,10 +156,7 @@ export default function MatchHistory() {
     });
   };
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const canPrev = page > 0;
-  const canNext = (page + 1) * PAGE_SIZE < total;
-  const showUndo = isAdmin && !isFiltered && page === 0;
+  const showUndo = isAdmin && !isFiltered;
 
   const player2Options = players.filter((p) => p.id !== filter1);
 
@@ -186,157 +227,169 @@ export default function MatchHistory() {
           {isFiltered ? 'No matches match these filters.' : 'No matches yet.'}
         </div>
       ) : (
-        <div className="space-y-2">
-          {matches.map((match, index) => {
-            const odds = preMatchWinnerOdds(match);
-            const isTournament = match.tournamentMatchId != null;
-            const showMeta =
-              odds != null || isTournament || match.isChallenge || isUpset(match) || isAdmin;
+        <>
+          <div className="space-y-2">
+            {matches.map((match, index) => {
+              const odds = preMatchWinnerOdds(match);
+              const isTournament = match.tournamentMatchId != null;
+              const showMeta =
+                odds != null || isTournament || match.isChallenge || isUpset(match) || isAdmin;
 
-            const matchup = (
-              <>
-                <Link
-                  to={`/players/${match.winnerId}`}
-                  className="font-medium text-emerald-400 hover:text-emerald-300 truncate"
-                >
-                  {match.winner?.name ?? `Player ${match.winnerId}`}
-                </Link>
-                <span className="text-slate-500 shrink-0">def.</span>
-                <Link
-                  to={`/players/${match.loserId}`}
-                  className="font-medium text-red-400 hover:text-red-300 truncate"
-                >
-                  {match.loser?.name ?? `Player ${match.loserId}`}
-                </Link>
-              </>
-            );
-
-            const score =
-              match.games && match.games.length > 0 && hasPointScores(match.games) ? (
-                <span className="text-slate-400 text-sm shrink-0">
-                  {match.winnerScore}-{match.loserScore}{' '}
-                  <span className="text-slate-500">
-                    ({match.games
-                      .map((g) =>
-                        g.winnerScore != null ? `${g.winnerScore}-${g.loserScore}` : '\u2013',
-                      )
-                      .join(', ')})
-                  </span>
-                </span>
-              ) : match.winnerScore != null && match.loserScore != null ? (
-                <span className="text-slate-400 text-sm shrink-0">
-                  {match.winnerScore}-{match.loserScore}
-                </span>
-              ) : null;
-
-            const chips = (
-              <>
-                {odds != null && (
-                  <span
-                    className="text-xs tabular-nums"
-                    style={{ color: oddsColor(odds) }}
-                    title="Winner's pre-match win odds"
+              const matchup = (
+                <>
+                  <Link
+                    to={`/players/${match.winnerId}`}
+                    className="font-medium text-emerald-400 hover:text-emerald-300 truncate"
                   >
-                    {Math.round(odds * 100)}%
-                  </span>
-                )}
-                {isTournament && (
-                  <span className="text-amber-400 text-xs font-medium px-2 py-0.5 bg-amber-400/10 rounded-full">
-                    TOURNAMENT
-                  </span>
-                )}
-                {match.isChallenge && (
-                  <span className="text-purple-400 text-xs font-medium px-2 py-0.5 bg-purple-400/10 rounded-full">
-                    CHALLENGE
-                  </span>
-                )}
-                {isUpset(match) && (
-                  <span className="text-yellow-400 text-xs font-medium px-2 py-0.5 bg-yellow-400/10 rounded-full">
-                    UPSET
-                  </span>
-                )}
-              </>
-            );
+                    {match.winner?.name ?? `Player ${match.winnerId}`}
+                  </Link>
+                  <span className="text-slate-500 shrink-0">def.</span>
+                  <Link
+                    to={`/players/${match.loserId}`}
+                    className="font-medium text-red-400 hover:text-red-300 truncate"
+                  >
+                    {match.loser?.name ?? `Player ${match.loserId}`}
+                  </Link>
+                </>
+              );
 
-            const deltas = (
-              <>
-                <span className="text-emerald-400 tabular-nums">
-                  +{Math.round(match.winnerRatingChange)}
+              const score =
+                match.games && match.games.length > 0 && hasPointScores(match.games) ? (
+                  <span className="text-slate-400 text-sm shrink-0">
+                    {match.winnerScore}-{match.loserScore}{' '}
+                    <span className="text-slate-500">
+                      ({match.games
+                        .map((g) =>
+                          g.winnerScore != null ? `${g.winnerScore}-${g.loserScore}` : '–',
+                        )
+                        .join(', ')})
+                    </span>
+                  </span>
+                ) : match.winnerScore != null && match.loserScore != null ? (
+                  <span className="text-slate-400 text-sm shrink-0">
+                    {match.winnerScore}-{match.loserScore}
+                  </span>
+                ) : null;
+
+              const chips = (
+                <>
+                  {odds != null && (
+                    <span
+                      className="text-xs tabular-nums"
+                      style={{ color: oddsColor(odds) }}
+                      title="Winner's pre-match win odds"
+                    >
+                      {Math.round(odds * 100)}%
+                    </span>
+                  )}
+                  {isTournament && (
+                    <span className="text-amber-400 text-xs font-medium px-2 py-0.5 bg-amber-400/10 rounded-full">
+                      TOURNAMENT
+                    </span>
+                  )}
+                  {match.isChallenge && (
+                    <span className="text-purple-400 text-xs font-medium px-2 py-0.5 bg-purple-400/10 rounded-full">
+                      CHALLENGE
+                    </span>
+                  )}
+                  {isUpset(match) && (
+                    <span className="text-yellow-400 text-xs font-medium px-2 py-0.5 bg-yellow-400/10 rounded-full">
+                      UPSET
+                    </span>
+                  )}
+                </>
+              );
+
+              const deltas = (
+                <>
+                  <span className="text-emerald-400 tabular-nums">
+                    +{Math.round(match.winnerRatingChange)}
+                  </span>
+                  <span className="text-red-400 tabular-nums">
+                    {Math.round(match.loserRatingChange)}
+                  </span>
+                </>
+              );
+
+              const dateEl = isAdmin ? (
+                <span className="text-slate-500 text-xs whitespace-nowrap">
+                  {formatDate(match.createdAt)}
                 </span>
-                <span className="text-red-400 tabular-nums">
-                  {Math.round(match.loserRatingChange)}
-                </span>
-              </>
-            );
-
-            const dateEl = isAdmin ? (
-              <span className="text-slate-500 text-xs whitespace-nowrap">
-                {formatDate(match.createdAt)}
-              </span>
-            ) : null;
-
-            // The most recent match (unfiltered, first page) undoes \u2014 reverting
-            // rating *and* ladder changes. Any other match is a plain delete
-            // that recomputes ratings but leaves ladder positions untouched.
-            const isMostRecent = index === 0 && showUndo;
-            const actionBusy = isMostRecent ? undoing : deletingId === match.id;
-            const actionBtn =
-              isMostRecent || (isAdmin && !isTournament) ? (
-                <button
-                  onClick={() => (isMostRecent ? handleUndo() : handleDelete(match))}
-                  disabled={actionBusy}
-                  title={
-                    isMostRecent
-                      ? 'Undo most recent match (reverts rating and ladder changes)'
-                      : 'Delete match and recompute ratings'
-                  }
-                  className="opacity-100 sm:opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-slate-600 hover:text-red-400 text-sm w-4 shrink-0 disabled:opacity-50"
-                >
-                  {actionBusy ? '\u2026' : '\u00d7'}
-                </button>
               ) : null;
 
-            return (
-              <div key={match.id} className="flex items-center gap-2">
-                <div className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 group">
-                  {/* Desktop: single row */}
-                  <div className="hidden sm:flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      {matchup}
-                      {score}
-                    </div>
-                    <div className="flex items-center gap-3 text-sm shrink-0 ml-3">
-                      {chips}
-                      {deltas}
-                      {dateEl && <span className="w-28 text-right">{dateEl}</span>}
-                      {actionBtn}
-                    </div>
-                  </div>
+              // The most recent match (unfiltered) undoes — reverting rating
+              // *and* ladder changes. Any other match is a plain delete that
+              // recomputes ratings but leaves ladder positions untouched.
+              const isMostRecent = index === 0 && showUndo;
+              const actionBusy = isMostRecent ? undoing : deletingId === match.id;
+              const actionBtn =
+                isMostRecent || (isAdmin && !isTournament) ? (
+                  <button
+                    onClick={() => (isMostRecent ? handleUndo() : handleDelete(match))}
+                    disabled={actionBusy}
+                    title={
+                      isMostRecent
+                        ? 'Undo most recent match (reverts rating and ladder changes)'
+                        : 'Delete match and recompute ratings'
+                    }
+                    className="opacity-100 sm:opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-slate-600 hover:text-red-400 text-sm w-4 shrink-0 disabled:opacity-50"
+                  >
+                    {actionBusy ? '…' : '×'}
+                  </button>
+                ) : null;
 
-                  {/* Mobile: stacked */}
-                  <div className="flex flex-col gap-1 sm:hidden">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0">
+              return (
+                <div key={match.id} className="flex items-center gap-2">
+                  <div className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 group">
+                    {/* Desktop: single row */}
+                    <div className="hidden sm:flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
                         {matchup}
+                        {score}
                       </div>
-                      {actionBtn}
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      {score ?? <span />}
-                      <span className="flex items-center gap-2 shrink-0 text-sm">{deltas}</span>
-                    </div>
-                    {showMeta && (
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                      <div className="flex items-center gap-3 text-sm shrink-0 ml-3">
                         {chips}
-                        {dateEl && <span className="ml-auto">{dateEl}</span>}
+                        {deltas}
+                        {dateEl && <span className="w-28 text-right">{dateEl}</span>}
+                        {actionBtn}
                       </div>
-                    )}
+                    </div>
+
+                    {/* Mobile: stacked */}
+                    <div className="flex flex-col gap-1 sm:hidden">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0">
+                          {matchup}
+                        </div>
+                        {actionBtn}
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        {score ?? <span />}
+                        <span className="flex items-center gap-2 shrink-0 text-sm">{deltas}</span>
+                      </div>
+                      {showMeta && (
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                          {chips}
+                          {dateEl && <span className="ml-auto">{dateEl}</span>}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+
+          {hasMore ? (
+            <div ref={sentinelRef} className="py-4 text-center text-sm text-slate-500">
+              {loadingMore ? 'Loading more…' : ''}
+            </div>
+          ) : (
+            <div className="mt-4 text-center text-sm text-slate-500">
+              {total} {total === 1 ? 'match' : 'matches'}
+            </div>
+          )}
+        </>
       )}
 
       {showLogMatch && (
@@ -345,33 +398,9 @@ export default function MatchHistory() {
           onClose={() => setShowLogMatch(false)}
           onLogged={() => {
             setShowLogMatch(false);
-            fetchMatches();
+            reload();
           }}
         />
-      )}
-
-      {total > PAGE_SIZE && (
-        <div className="flex items-center justify-between mt-4 text-sm">
-          <span className="text-slate-500">
-            Page {page + 1} of {totalPages} · {total} {total === 1 ? 'match' : 'matches'}
-          </span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={!canPrev || loading}
-              className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              Prev
-            </button>
-            <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={!canNext || loading}
-              className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              Next
-            </button>
-          </div>
-        </div>
       )}
     </div>
   );
