@@ -37,7 +37,7 @@ export default function TournamentBracket({ matches, onMatchClick }: Props) {
     <div className="overflow-x-auto pb-2">
       <div className="flex gap-4 min-w-max">
         {roundEntries.map(([round, roundMatches]) => (
-          <div key={round} className="flex flex-col gap-3 min-w-[12rem]">
+          <div key={round} className="flex flex-col gap-3 min-w-[10rem] sm:min-w-[12rem]">
             <h3 className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
               {roundLabel(round, totalRounds)}
             </h3>

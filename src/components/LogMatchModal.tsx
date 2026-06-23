@@ -274,7 +274,7 @@ export default function LogMatchModal({
         <h2 className="text-xl font-bold mb-4">Log Match</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Player Selection */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="block text-sm text-slate-400 mb-1">
                 Player 1
