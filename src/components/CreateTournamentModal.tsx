@@ -121,7 +121,7 @@ export default function CreateTournamentModal({ onClose, onCreated }: Props) {
               Participants{' '}
               <span className="text-slate-600">({selected.size} selected)</span>
             </label>
-            <div className="grid grid-cols-2 gap-1 max-h-60 overflow-y-auto bg-slate-900/50 border border-slate-700 rounded-lg p-2">
+            <div className="grid grid-cols-1 gap-1 max-h-60 overflow-y-auto sm:grid-cols-2 bg-slate-900/50 border border-slate-700 rounded-lg p-2">
               {players.map((p) => {
                 const isSelected = selected.has(p.id);
                 return (

@@ -220,7 +220,7 @@ export default function PlayerProfile() {
             </span>
           </div>
         </div>
-        <div className="grid grid-cols-4 gap-4 text-center">
+        <div className="grid grid-cols-4 gap-2 text-center sm:gap-4">
           <div>
             <div className="text-2xl font-bold">
               {player.wins + player.losses}
@@ -311,7 +311,7 @@ export default function PlayerProfile() {
       )}
 
       {/* Streak & Form */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 sm:gap-4">
         <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
           <h3 className="text-sm text-slate-400 mb-2">Current Streak</h3>
           {player.streak ? (

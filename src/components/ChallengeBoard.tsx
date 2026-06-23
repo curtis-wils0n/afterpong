@@ -150,7 +150,7 @@ export default function ChallengeBoard() {
             return (
               <div key={player.id} className="flex items-center gap-2">
                 <div
-                  className={`flex-1 flex items-center gap-4 rounded-lg px-4 py-3 border transition-colors ${
+                  className={`flex-1 flex items-center gap-2 rounded-lg px-4 py-3 border transition-colors sm:gap-4 ${
                     isVacation
                       ? 'bg-slate-800/40 border-slate-700/50 opacity-50'
                       : isSelected
@@ -204,7 +204,7 @@ export default function ChallengeBoard() {
                       </span>
                     )}
                   </Link>
-                  <div className="w-20 shrink-0 flex justify-end gap-0.5">
+                  <div className="hidden w-20 shrink-0 sm:flex justify-end gap-0.5">
                     {player.defenses != null && player.defenses > 0 &&
                       Array.from({ length: player.defenses }, (_, i) => (
                         <span key={`d${i}`} className="text-sm" title={`${player.defenses} defense${player.defenses === 1 ? '' : 's'}`}>{'\u{1F6E1}\u{FE0F}'}</span>
@@ -216,11 +216,11 @@ export default function ChallengeBoard() {
                       ))
                     }
                   </div>
-                  <span className="text-sm text-slate-500 tabular-nums w-20 text-right shrink-0">
+                  <span className="text-sm text-slate-500 tabular-nums w-16 text-right shrink-0 sm:w-20">
                     {Math.round(conservativeRating(player))}
                   </span>
                 </div>
-                <div className="w-24 shrink-0 flex justify-end">
+                <div className="w-20 shrink-0 flex justify-end sm:w-24">
                   {!selectedChallenger && canChallenge && !isVacation && (
                     <button
                       onClick={() => setSelectedChallenger(player.id)}

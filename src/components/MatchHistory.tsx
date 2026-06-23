@@ -190,8 +190,8 @@ export default function MatchHistory() {
           {matches.map((match, index) => (
             <div key={match.id} className="flex items-center gap-2">
               <div className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 group">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 sm:flex-1 sm:gap-3">
                     <Link
                       to={`/players/${match.winnerId}`}
                       className="font-medium text-emerald-400 hover:text-emerald-300 truncate"
@@ -219,7 +219,7 @@ export default function MatchHistory() {
                       </span>
                     ) : null}
                   </div>
-                  <div className="flex items-center gap-3 text-sm shrink-0 ml-3">
+                  <div className="flex flex-wrap items-center gap-2 text-sm shrink-0 sm:ml-3 sm:gap-3">
                     {(() => {
                       const odds = preMatchWinnerOdds(match);
                       return odds != null ? (

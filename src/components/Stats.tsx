@@ -480,7 +480,7 @@ function RatingHistoryChart({
   };
 
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-6 h-[520px] flex flex-col">
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-6 h-[440px] flex flex-col sm:h-[520px]">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm text-slate-400">Skill over time</h3>
         <div className="flex gap-1">
@@ -602,7 +602,7 @@ function RatingHistoryChart({
               </LineChart>
             </ResponsiveContainer>
           </div>
-          <ul className="thin-scrollbar flex flex-col gap-0.5 py-1 text-xs select-none min-w-[80px] overflow-y-auto">
+          <ul className="thin-scrollbar flex flex-col gap-0.5 py-1 text-xs select-none min-w-[64px] overflow-y-auto sm:min-w-[80px]">
             {eligibleSeries.map((s) => {
               const color = colorById.get(s.id) ?? '#94a3b8';
               const hidden = hiddenIds.has(s.id);
@@ -798,7 +798,7 @@ export default function Stats() {
 
       {/* Streaks */}
       <h2 className="text-lg font-semibold mb-3">Streaks</h2>
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 sm:gap-4">
         {stats.streaks.currentWinStreak ? (
           <StreakCard
             label="Current Longest Win Streak"
@@ -1150,7 +1150,7 @@ export default function Stats() {
 
       {/* Challenge Ladder */}
       <h2 className="text-lg font-semibold mb-3">Challenge Ladder</h2>
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 sm:gap-4">
         {stats.ladder.mostSuccessfulClimbs ? (
           <StatCard
             label="Most Successful Climbs"

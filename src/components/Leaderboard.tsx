@@ -120,7 +120,7 @@ export default function Leaderboard() {
             <Link
               key={player.id}
               to={`/players/${player.id}`}
-              className={`flex items-center gap-4 border rounded-lg px-4 py-3 transition-colors group ${
+              className={`flex items-center gap-3 border rounded-lg px-4 py-3 transition-colors group sm:gap-4 ${
                 player.onVacation
                   ? 'bg-slate-800/40 border-slate-700/50 opacity-50 hover:opacity-80 hover:bg-slate-800'
                   : 'bg-slate-800 hover:bg-slate-700 border-slate-700'

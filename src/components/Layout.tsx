@@ -17,16 +17,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       <nav className="bg-slate-800 border-b border-slate-700">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link to="/" className="text-xl font-bold tracking-tight">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
+          <Link to="/" className="text-xl font-bold tracking-tight shrink-0">
             Afterpong
           </Link>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto thin-scrollbar">
             {navItems.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   location.pathname === item.path
                     ? 'bg-slate-700 text-white'
                     : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
@@ -35,19 +35,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 {item.label}
               </Link>
             ))}
-            <div className="ml-3 flex items-center gap-2">
-              {isAdmin && (
-                <span className="text-xs font-medium text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
-                  Admin
-                </span>
-              )}
-              <button
-                onClick={logout}
-                className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
-              >
-                Logout
-              </button>
-            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {isAdmin && (
+              <span className="text-xs font-medium text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+                Admin
+              </span>
+            )}
+            <button
+              onClick={logout}
+              className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              Logout
+            </button>
           </div>
         </div>
       </nav>
