@@ -275,15 +275,24 @@ export default function MatchHistory() {
               </span>
             ) : null;
 
-            const deleteBtn =
-              isAdmin && !isTournament ? (
+            // The most recent match (unfiltered, first page) undoes \u2014 reverting
+            // rating *and* ladder changes. Any other match is a plain delete
+            // that recomputes ratings but leaves ladder positions untouched.
+            const isMostRecent = index === 0 && showUndo;
+            const actionBusy = isMostRecent ? undoing : deletingId === match.id;
+            const actionBtn =
+              isMostRecent || (isAdmin && !isTournament) ? (
                 <button
-                  onClick={() => handleDelete(match)}
-                  disabled={deletingId === match.id}
-                  title="Delete match and recompute ratings"
+                  onClick={() => (isMostRecent ? handleUndo() : handleDelete(match))}
+                  disabled={actionBusy}
+                  title={
+                    isMostRecent
+                      ? 'Undo most recent match (reverts rating and ladder changes)'
+                      : 'Delete match and recompute ratings'
+                  }
                   className="opacity-100 sm:opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-slate-600 hover:text-red-400 text-sm w-4 shrink-0 disabled:opacity-50"
                 >
-                  {deletingId === match.id ? '\u2026' : '\u00d7'}
+                  {actionBusy ? '\u2026' : '\u00d7'}
                 </button>
               ) : null;
 
@@ -300,14 +309,17 @@ export default function MatchHistory() {
                       {chips}
                       {deltas}
                       {dateEl && <span className="w-28 text-right">{dateEl}</span>}
-                      {deleteBtn}
+                      {actionBtn}
                     </div>
                   </div>
 
                   {/* Mobile: stacked */}
                   <div className="flex flex-col gap-1 sm:hidden">
-                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0">
-                      {matchup}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0">
+                        {matchup}
+                      </div>
+                      {actionBtn}
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       {score ?? <span />}
@@ -316,25 +328,11 @@ export default function MatchHistory() {
                     {showMeta && (
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                         {chips}
-                        {(dateEl || deleteBtn) && (
-                          <span className="ml-auto flex items-center gap-2">
-                            {dateEl}
-                            {deleteBtn}
-                          </span>
-                        )}
+                        {dateEl && <span className="ml-auto">{dateEl}</span>}
                       </div>
                     )}
                   </div>
                 </div>
-                {index === 0 && showUndo && (
-                  <button
-                    onClick={handleUndo}
-                    disabled={undoing}
-                    className="shrink-0 text-xs text-red-400 hover:text-red-300 bg-red-400/10 hover:bg-red-400/20 px-2 py-1 rounded transition-colors disabled:opacity-50"
-                  >
-                    {undoing ? 'Undoing...' : 'Undo'}
-                  </button>
-                )}
               </div>
             );
           })}
