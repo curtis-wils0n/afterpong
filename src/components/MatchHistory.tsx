@@ -187,101 +187,157 @@ export default function MatchHistory() {
         </div>
       ) : (
         <div className="space-y-2">
-          {matches.map((match, index) => (
-            <div key={match.id} className="flex items-center gap-2">
-              <div className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 group">
-                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 sm:flex-1 sm:gap-3">
-                    <Link
-                      to={`/players/${match.winnerId}`}
-                      className="font-medium text-emerald-400 hover:text-emerald-300 truncate"
-                    >
-                      {match.winner?.name ?? `Player ${match.winnerId}`}
-                    </Link>
-                    <span className="text-slate-500 shrink-0">def.</span>
-                    <Link
-                      to={`/players/${match.loserId}`}
-                      className="font-medium text-red-400 hover:text-red-300 truncate"
-                    >
-                      {match.loser?.name ?? `Player ${match.loserId}`}
-                    </Link>
-                    {match.games && match.games.length > 0 && hasPointScores(match.games) ? (
-                      <span className="text-slate-400 text-sm shrink-0">
-                        {match.winnerScore}-{match.loserScore}
-                        {' '}
-                        <span className="text-slate-500">
-                          ({match.games.map(g => g.winnerScore != null ? `${g.winnerScore}-${g.loserScore}` : '\u2013').join(', ')})
-                        </span>
-                      </span>
-                    ) : match.winnerScore != null && match.loserScore != null ? (
-                      <span className="text-slate-400 text-sm shrink-0">
-                        {match.winnerScore}-{match.loserScore}
-                      </span>
-                    ) : null}
+          {matches.map((match, index) => {
+            const odds = preMatchWinnerOdds(match);
+            const isTournament = match.tournamentMatchId != null;
+            const showMeta =
+              odds != null || isTournament || match.isChallenge || isUpset(match) || isAdmin;
+
+            const matchup = (
+              <>
+                <Link
+                  to={`/players/${match.winnerId}`}
+                  className="font-medium text-emerald-400 hover:text-emerald-300 truncate"
+                >
+                  {match.winner?.name ?? `Player ${match.winnerId}`}
+                </Link>
+                <span className="text-slate-500 shrink-0">def.</span>
+                <Link
+                  to={`/players/${match.loserId}`}
+                  className="font-medium text-red-400 hover:text-red-300 truncate"
+                >
+                  {match.loser?.name ?? `Player ${match.loserId}`}
+                </Link>
+              </>
+            );
+
+            const score =
+              match.games && match.games.length > 0 && hasPointScores(match.games) ? (
+                <span className="text-slate-400 text-sm shrink-0">
+                  {match.winnerScore}-{match.loserScore}{' '}
+                  <span className="text-slate-500">
+                    ({match.games
+                      .map((g) =>
+                        g.winnerScore != null ? `${g.winnerScore}-${g.loserScore}` : '\u2013',
+                      )
+                      .join(', ')})
+                  </span>
+                </span>
+              ) : match.winnerScore != null && match.loserScore != null ? (
+                <span className="text-slate-400 text-sm shrink-0">
+                  {match.winnerScore}-{match.loserScore}
+                </span>
+              ) : null;
+
+            const chips = (
+              <>
+                {odds != null && (
+                  <span
+                    className="text-xs tabular-nums"
+                    style={{ color: oddsColor(odds) }}
+                    title="Winner's pre-match win odds"
+                  >
+                    {Math.round(odds * 100)}%
+                  </span>
+                )}
+                {isTournament && (
+                  <span className="text-amber-400 text-xs font-medium px-2 py-0.5 bg-amber-400/10 rounded-full">
+                    TOURNAMENT
+                  </span>
+                )}
+                {match.isChallenge && (
+                  <span className="text-purple-400 text-xs font-medium px-2 py-0.5 bg-purple-400/10 rounded-full">
+                    CHALLENGE
+                  </span>
+                )}
+                {isUpset(match) && (
+                  <span className="text-yellow-400 text-xs font-medium px-2 py-0.5 bg-yellow-400/10 rounded-full">
+                    UPSET
+                  </span>
+                )}
+              </>
+            );
+
+            const deltas = (
+              <>
+                <span className="text-emerald-400 tabular-nums">
+                  +{Math.round(match.winnerRatingChange)}
+                </span>
+                <span className="text-red-400 tabular-nums">
+                  {Math.round(match.loserRatingChange)}
+                </span>
+              </>
+            );
+
+            const dateEl = isAdmin ? (
+              <span className="text-slate-500 text-xs whitespace-nowrap">
+                {formatDate(match.createdAt)}
+              </span>
+            ) : null;
+
+            const deleteBtn =
+              isAdmin && !isTournament ? (
+                <button
+                  onClick={() => handleDelete(match)}
+                  disabled={deletingId === match.id}
+                  title="Delete match and recompute ratings"
+                  className="opacity-100 sm:opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-slate-600 hover:text-red-400 text-sm w-4 shrink-0 disabled:opacity-50"
+                >
+                  {deletingId === match.id ? '\u2026' : '\u00d7'}
+                </button>
+              ) : null;
+
+            return (
+              <div key={match.id} className="flex items-center gap-2">
+                <div className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 group">
+                  {/* Desktop: single row */}
+                  <div className="hidden sm:flex items-center justify-between">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {matchup}
+                      {score}
+                    </div>
+                    <div className="flex items-center gap-3 text-sm shrink-0 ml-3">
+                      {chips}
+                      {deltas}
+                      {dateEl && <span className="w-28 text-right">{dateEl}</span>}
+                      {deleteBtn}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 text-sm shrink-0 sm:ml-3 sm:gap-3">
-                    {(() => {
-                      const odds = preMatchWinnerOdds(match);
-                      return odds != null ? (
-                        <span
-                          className="text-xs tabular-nums"
-                          style={{ color: oddsColor(odds) }}
-                          title="Winner's pre-match win odds"
-                        >
-                          {Math.round(odds * 100)}%
-                        </span>
-                      ) : null;
-                    })()}
-                    {match.tournamentMatchId != null && (
-                      <span className="text-amber-400 text-xs font-medium px-2 py-0.5 bg-amber-400/10 rounded-full">
-                        TOURNAMENT
-                      </span>
-                    )}
-                    {match.isChallenge && (
-                      <span className="text-purple-400 text-xs font-medium px-2 py-0.5 bg-purple-400/10 rounded-full">
-                        CHALLENGE
-                      </span>
-                    )}
-                    {isUpset(match) && (
-                      <span className="text-yellow-400 text-xs font-medium px-2 py-0.5 bg-yellow-400/10 rounded-full">
-                        UPSET
-                      </span>
-                    )}
-                    <span className="text-emerald-400 tabular-nums">
-                      +{Math.round(match.winnerRatingChange)}
-                    </span>
-                    <span className="text-red-400 tabular-nums">
-                      {Math.round(match.loserRatingChange)}
-                    </span>
-                    {isAdmin && (
-                      <span className="text-slate-500 text-xs w-28 text-right">
-                        {formatDate(match.createdAt)}
-                      </span>
-                    )}
-                    {isAdmin && match.tournamentMatchId == null && (
-                      <button
-                        onClick={() => handleDelete(match)}
-                        disabled={deletingId === match.id}
-                        title="Delete match and recompute ratings"
-                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-slate-600 hover:text-red-400 text-sm w-4 disabled:opacity-50"
-                      >
-                        {deletingId === match.id ? '\u2026' : '\u00d7'}
-                      </button>
+
+                  {/* Mobile: stacked */}
+                  <div className="flex flex-col gap-1 sm:hidden">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0">
+                      {matchup}
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      {score ?? <span />}
+                      <span className="flex items-center gap-2 shrink-0 text-sm">{deltas}</span>
+                    </div>
+                    {showMeta && (
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                        {chips}
+                        {(dateEl || deleteBtn) && (
+                          <span className="ml-auto flex items-center gap-2">
+                            {dateEl}
+                            {deleteBtn}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
+                {index === 0 && showUndo && (
+                  <button
+                    onClick={handleUndo}
+                    disabled={undoing}
+                    className="shrink-0 text-xs text-red-400 hover:text-red-300 bg-red-400/10 hover:bg-red-400/20 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                  >
+                    {undoing ? 'Undoing...' : 'Undo'}
+                  </button>
+                )}
               </div>
-              {index === 0 && showUndo && (
-                <button
-                  onClick={handleUndo}
-                  disabled={undoing}
-                  className="shrink-0 text-xs text-red-400 hover:text-red-300 bg-red-400/10 hover:bg-red-400/20 px-2 py-1 rounded transition-colors disabled:opacity-50"
-                >
-                  {undoing ? 'Undoing...' : 'Undo'}
-                </button>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

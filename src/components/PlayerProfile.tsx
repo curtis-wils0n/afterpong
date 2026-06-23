@@ -587,6 +587,86 @@ export default function PlayerProfile() {
               const opponentName =
                 opponentMap.get(opponentId) || `Player #${opponentId}`;
 
+              const isTournament = match.tournamentMatchId != null;
+              const hasBadges = isTournament || match.isChallenge || isUpset(match);
+
+              const wl = (
+                <span
+                  className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                    won
+                      ? 'bg-emerald-500/20 text-emerald-400'
+                      : 'bg-red-500/20 text-red-400'
+                  }`}
+                >
+                  {won ? 'W' : 'L'}
+                </span>
+              );
+
+              const nameEl = (
+                <span className="text-sm truncate">
+                  vs{' '}
+                  <Link
+                    to={`/players/${opponentId}`}
+                    className="hover:text-emerald-400 transition-colors"
+                  >
+                    {opponentName}
+                  </Link>
+                </span>
+              );
+
+              const score =
+                match.games && match.games.length > 0 && hasPointScores(match.games) ? (
+                  <span className="text-slate-500 text-sm">
+                    {won
+                      ? `${match.winnerScore}-${match.loserScore}`
+                      : `${match.loserScore}-${match.winnerScore}`}{' '}
+                    ({match.games
+                      .map((g) =>
+                        g.winnerScore == null
+                          ? '\u2013'
+                          : won
+                            ? `${g.winnerScore}-${g.loserScore}`
+                            : `${g.loserScore}-${g.winnerScore}`,
+                      )
+                      .join(', ')})
+                  </span>
+                ) : match.winnerScore != null && match.loserScore != null ? (
+                  <span className="text-slate-500 text-sm">
+                    {won
+                      ? `${match.winnerScore}-${match.loserScore}`
+                      : `${match.loserScore}-${match.winnerScore}`}
+                  </span>
+                ) : null;
+
+              const badges = (
+                <>
+                  {isTournament && (
+                    <span className="text-amber-400 text-xs font-medium px-2 py-0.5 bg-amber-400/10 rounded-full">
+                      TOURNAMENT
+                    </span>
+                  )}
+                  {match.isChallenge && (
+                    <span className="text-purple-400 text-xs font-medium px-2 py-0.5 bg-purple-400/10 rounded-full">
+                      CHALLENGE
+                    </span>
+                  )}
+                  {isUpset(match) && (
+                    <span className="text-yellow-400 text-xs font-medium px-2 py-0.5 bg-yellow-400/10 rounded-full">
+                      UPSET
+                    </span>
+                  )}
+                </>
+              );
+
+              const delta = (
+                <span
+                  className={`text-sm font-mono tabular-nums ${ratingChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                >
+                  {ratingChange >= 0 ? '+' : ''}
+                  {ratingChange}
+                </span>
+              );
+
               return (
                 <div
                   key={match.id}
@@ -594,68 +674,32 @@ export default function PlayerProfile() {
                     won ? 'border-emerald-500/20' : 'border-red-500/20'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-xs font-bold px-1.5 py-0.5 rounded ${
-                          won
-                            ? 'bg-emerald-500/20 text-emerald-400'
-                            : 'bg-red-500/20 text-red-400'
-                        }`}
-                      >
-                        {won ? 'W' : 'L'}
-                      </span>
-                      <span className="text-sm">
-                        vs{' '}
-                        <Link
-                          to={`/players/${opponentId}`}
-                          className="hover:text-emerald-400 transition-colors"
-                        >
-                          {opponentName}
-                        </Link>
-                      </span>
-                      {match.games && match.games.length > 0 && hasPointScores(match.games) ? (
-                        <span className="text-slate-500 text-sm">
-                          {won
-                            ? `${match.winnerScore}-${match.loserScore}`
-                            : `${match.loserScore}-${match.winnerScore}`}
-                          {' '}
-                          ({match.games.map(g =>
-                            g.winnerScore == null ? '\u2013' : won ? `${g.winnerScore}-${g.loserScore}` : `${g.loserScore}-${g.winnerScore}`
-                          ).join(', ')})
-                        </span>
-                      ) : match.winnerScore != null &&
-                        match.loserScore != null ? (
-                          <span className="text-slate-500 text-sm">
-                            {won
-                              ? `${match.winnerScore}-${match.loserScore}`
-                              : `${match.loserScore}-${match.winnerScore}`}
-                          </span>
-                        ) : null}
+                  {/* Desktop: single row */}
+                  <div className="hidden sm:flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {wl}
+                      {nameEl}
+                      {score}
                     </div>
-                    <div className="flex items-center gap-2">
-                      {match.tournamentMatchId != null && (
-                        <span className="text-amber-400 text-xs font-medium px-2 py-0.5 bg-amber-400/10 rounded-full">
-                          TOURNAMENT
-                        </span>
-                      )}
-                      {match.isChallenge && (
-                        <span className="text-purple-400 text-xs font-medium px-2 py-0.5 bg-purple-400/10 rounded-full">
-                          CHALLENGE
-                        </span>
-                      )}
-                      {isUpset(match) && (
-                        <span className="text-yellow-400 text-xs font-medium px-2 py-0.5 bg-yellow-400/10 rounded-full">
-                          UPSET
-                        </span>
-                      )}
-                      <span
-                        className={`text-sm font-mono tabular-nums ${ratingChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
-                      >
-                        {ratingChange >= 0 ? '+' : ''}
-                        {ratingChange}
-                      </span>
+                    <div className="flex items-center gap-2 shrink-0 ml-3">
+                      {badges}
+                      {delta}
                     </div>
+                  </div>
+
+                  {/* Mobile: stacked */}
+                  <div className="flex flex-col gap-1 sm:hidden">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-2 min-w-0">
+                        {wl}
+                        {nameEl}
+                      </span>
+                      <span className="shrink-0">{delta}</span>
+                    </div>
+                    {score && <div>{score}</div>}
+                    {hasBadges && (
+                      <div className="flex flex-wrap items-center gap-2">{badges}</div>
+                    )}
                   </div>
                 </div>
               );
