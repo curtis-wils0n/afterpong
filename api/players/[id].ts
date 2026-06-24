@@ -2,15 +2,16 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { db } from '../../db/index.js';
 import { players, matches } from '../../db/schema.js';
 import { eq, or, desc, inArray } from 'drizzle-orm';
-import { requireAuth, requireAdmin } from '../_lib/auth.js';
+import { requireAuth } from '../_lib/auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const id = Number(req.query.id);
   if (isNaN(id)) return res.status(400).json({ error: 'Invalid player ID' });
 
   if (req.method === 'PATCH') {
-    const isAdmin = await requireAdmin(req, res);
-    if (!isAdmin) return;
+    // Any authenticated user can toggle a player's vacation status.
+    const role = await requireAuth(req, res);
+    if (!role) return;
 
     const { onVacation } = req.body ?? {};
     if (typeof onVacation !== 'boolean') {

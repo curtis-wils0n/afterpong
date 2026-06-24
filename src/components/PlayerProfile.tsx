@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, Tooltip } from 'recharts';
 import { api } from '../lib/api';
-import { useAuth } from '../lib/auth';
 import { isUpset, expectedScore, conservativeRating } from '../../lib/glicko';
 import { hasPointScores } from '../../lib/games';
 import { niceAxis } from '../lib/chart';
@@ -16,7 +15,6 @@ import type { PlayerProfile as PlayerProfileType } from '../types';
 
 export default function PlayerProfile() {
   const { id } = useParams<{ id: string }>();
-  const { isAdmin } = useAuth();
   const [player, setPlayer] = useState<PlayerProfileType | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedH2H, setExpandedH2H] = useState<number | null>(null);
@@ -175,25 +173,23 @@ export default function PlayerProfile() {
                   ON VACATION
                 </span>
               )}
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={handleToggleVacation}
-                  disabled={updatingVacation}
-                  title="Hidden from new matches while on vacation. Ladder position is held."
-                  className={`text-xs font-medium px-2 py-0.5 rounded-full border transition-colors disabled:opacity-50 ${
-                    player.onVacation
-                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/20'
-                      : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:border-slate-500'
-                  }`}
-                >
-                  {updatingVacation
-                    ? 'Updating...'
-                    : player.onVacation
-                      ? 'Back from vacation'
-                      : 'Set on vacation'}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleToggleVacation}
+                disabled={updatingVacation}
+                title="Hidden from new matches while on vacation. Ladder position is held."
+                className={`text-xs font-medium px-2 py-0.5 rounded-full border transition-colors disabled:opacity-50 ${
+                  player.onVacation
+                    ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/20'
+                    : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:border-slate-500'
+                }`}
+              >
+                {updatingVacation
+                  ? 'Updating...'
+                  : player.onVacation
+                    ? 'Back from vacation'
+                    : 'Set on vacation'}
+              </button>
             </div>
             {player.challengeRank != null && (
               <span className="text-sm text-slate-400">
