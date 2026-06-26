@@ -1,14 +1,42 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
-import { expectedScore } from '../../lib/glicko';
+import { expectedScore, blendedWinProbability } from '../../lib/glicko';
 import {
   inProgressGameProbability,
   seriesWinProbability,
 } from '../../lib/series';
-import type { Player } from '../types';
+import type { Player, Match } from '../types';
 
 // Game targets the modal can score to.
 const GAME_TARGETS = [11, 21] as const;
+
+// Per-game head-to-head record for `player1Id` across matches that are all
+// between the two selected players. Games are stored in match-winner
+// perspective, so flip them to player 1's view. Legacy rows with no per-game
+// array count as a single game won by the match winner.
+function pairGameRecord(
+  matches: Match[],
+  player1Id: number,
+): { wins: number; losses: number } {
+  let wins = 0;
+  let losses = 0;
+  for (const m of matches) {
+    const p1IsMatchWinner = m.winnerId === player1Id;
+    const games =
+      m.games && m.games.length > 0
+        ? m.games
+        : [{ winnerScore: 1, loserScore: 0 }];
+    for (const g of games) {
+      const matchWinnerWonGame =
+        g.winnerScore != null && g.loserScore != null
+          ? g.winnerScore > g.loserScore
+          : (g.wonByMatchWinner ?? true);
+      if (p1IsMatchWinner === matchWinnerWonGame) wins++;
+      else losses++;
+    }
+  }
+  return { wins, losses };
+}
 
 // Winner of a single game under first-to-`target`, win-by-2 rules, or null if
 // the game isn't decided yet (still in progress, or a deuce that hasn't broken
@@ -74,6 +102,30 @@ export default function LogMatchModal({
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  // Player 1's per-game head-to-head record against player 2, used to nudge the
+  // live odds toward the pair's real matchup. null until both are selected.
+  const [h2h, setH2h] = useState<{ wins: number; losses: number } | null>(null);
+
+  // Pull the pair's prior matches whenever the selection changes. With both
+  // ids set, the matches endpoint returns only games between the two.
+  useEffect(() => {
+    if (player1Id === '' || player2Id === '') {
+      setH2h(null);
+      return;
+    }
+    let cancelled = false;
+    api.matches
+      .list({ playerIds: [player1Id, player2Id], limit: 1000 })
+      .then((res) => {
+        if (!cancelled) setH2h(pairGameRecord(res.matches, player1Id));
+      })
+      .catch(() => {
+        if (!cancelled) setH2h(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [player1Id, player2Id]);
 
   // Arrow key scoring: left = point for player 1, right = point for player 2
   const handleKeyDown = useCallback(
@@ -354,8 +406,18 @@ export default function LogMatchModal({
               {(() => {
                 // Live series odds: decided games are locked in, the game in
                 // progress is run as a point race, and games not yet started
-                // use the flat per-game odds.
-                const p = expectedScore(player1, player2);
+                // use the flat per-game odds. The flat odds start from Glicko
+                // and are nudged toward the pair's real per-game head-to-head
+                // record (Beta-Binomial shrinkage), so a lopsided matchup the
+                // global rating misses shows up here.
+                const h2hGames = h2h ? h2h.wins + h2h.losses : 0;
+                const p = h2h
+                  ? blendedWinProbability(
+                      expectedScore(player1, player2),
+                      h2h.wins,
+                      h2h.losses,
+                    )
+                  : expectedScore(player1, player2);
                 const needed = Math.floor(gameScores.length / 2) + 1;
                 const undecidedProbs = gameScores
                   .filter((g) => outcomeOf(g) === null)
@@ -372,12 +434,19 @@ export default function LogMatchModal({
                 );
                 const label = gameScores.length > 1 ? 'series odds' : 'win odds';
                 return (
-                  <p className="text-xs text-slate-500 mt-1 tabular-nums">
-                    {label}:{' '}
-                    <span className="text-slate-300">{p1Odds}%</span>
-                    <span className="text-slate-600"> — </span>
-                    <span className="text-slate-300">{100 - p1Odds}%</span>
-                  </p>
+                  <>
+                    <p className="text-xs text-slate-500 mt-1 tabular-nums">
+                      {label}:{' '}
+                      <span className="text-slate-300">{p1Odds}%</span>
+                      <span className="text-slate-600"> — </span>
+                      <span className="text-slate-300">{100 - p1Odds}%</span>
+                    </p>
+                    {h2hGames > 0 && (
+                      <p className="text-xs text-slate-600 mt-0.5 tabular-nums">
+                        head-to-head: {h2h!.wins}-{h2h!.losses} games
+                      </p>
+                    )}
+                  </>
                 );
               })()}
               {trackPoints && (

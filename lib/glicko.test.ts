@@ -11,6 +11,8 @@ import {
   isUpset,
   daysBetween,
   UPSET_PROBABILITY,
+  blendedWinProbability,
+  H2H_PRIOR_GAMES,
 } from './glicko.js';
 
 describe('expectedScore', () => {
@@ -35,6 +37,47 @@ describe('expectedScore', () => {
     const uncertain = expectedScore({ rating: 1800, rd: 350 }, { rating: 1500, rd: 350 });
     expect(uncertain).toBeLessThan(certain);
     expect(uncertain).toBeGreaterThan(0.5);
+  });
+});
+
+describe('blendedWinProbability', () => {
+  it('returns the Glicko prediction unchanged with no shared history', () => {
+    expect(blendedWinProbability(0.36, 0, 0)).toBe(0.36);
+  });
+
+  it('pulls toward the empirical record as games accumulate', () => {
+    // 0.36 prior, player has lost the matchup 2-7 at the game level.
+    const blended = blendedWinProbability(0.36, 2, 7, 5);
+    expect(blended).toBeCloseTo((5 * 0.36 + 2) / (5 + 9), 10);
+    expect(blended).toBeLessThan(0.36);
+  });
+
+  it('pulls upward when the underdog owns the matchup', () => {
+    expect(blendedWinProbability(0.36, 7, 2, 5)).toBeGreaterThan(0.36);
+  });
+
+  it('moves further with more games at the same win rate', () => {
+    const few = blendedWinProbability(0.5, 0, 3, 5);
+    const many = blendedWinProbability(0.5, 0, 12, 5);
+    expect(many).toBeLessThan(few);
+    expect(few).toBeLessThan(0.5);
+  });
+
+  it('a heavier prior resists the record more', () => {
+    const light = blendedWinProbability(0.5, 0, 5, 2);
+    const heavy = blendedWinProbability(0.5, 0, 5, 20);
+    expect(heavy).toBeGreaterThan(light);
+  });
+
+  it('defaults the prior weight to H2H_PRIOR_GAMES', () => {
+    expect(blendedWinProbability(0.42, 3, 1)).toBe(
+      blendedWinProbability(0.42, 3, 1, H2H_PRIOR_GAMES),
+    );
+  });
+
+  it('stays within [0, 1]', () => {
+    expect(blendedWinProbability(0.99, 0, 50)).toBeGreaterThanOrEqual(0);
+    expect(blendedWinProbability(0.01, 50, 0)).toBeLessThanOrEqual(1);
   });
 });
 
