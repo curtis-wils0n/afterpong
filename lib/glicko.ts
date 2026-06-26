@@ -42,6 +42,35 @@ export function expectedScore(
   return 1 / (1 + Math.exp(-g(phi) * (muA - muB)));
 }
 
+// How many games of Glicko's opinion the prior is worth when blending in a
+// pair's actual head-to-head record. Higher = trust the rating longer before
+// the matchup takes over. ~5 means a 50/50-rated player needs roughly five
+// straight losses to a given opponent to drop to ~0.4 against them.
+export const H2H_PRIOR_GAMES = 5;
+
+// Fold a pair's real per-game head-to-head record into the Glicko prediction
+// via Beta-Binomial shrinkage: treat the Glicko per-game probability as a prior
+// worth `priorGames` pseudo-games, then update it with the observed wins/losses.
+// With no shared history this returns the Glicko prediction unchanged; the more
+// the two have actually played, the more their specific matchup takes over.
+// Captures non-transitive "they just have your number" effects that the global
+// rating smears away.
+//
+// Caveat: Glicko already learned from these same games, so the evidence is
+// double-counted to a degree. The small prior weight keeps that lean modest,
+// and it's why this is used only for the predictive odds display -- not for
+// ratings, upset detection, or the rating-vs-reality comparison on profiles.
+export function blendedWinProbability(
+  glickoProb: number,
+  wins: number,
+  losses: number,
+  priorGames: number = H2H_PRIOR_GAMES,
+): number {
+  const games = wins + losses;
+  if (games <= 0) return glickoProb;
+  return (priorGames * glickoProb + wins) / (priorGames + games);
+}
+
 // Conservative rating used for ranking: we're 97.5% sure the player is at
 // least this good. Low-game players rank low until the system knows them.
 export function conservativeRating(s: Pick<GlickoState, 'rating' | 'rd'>): number {
