@@ -13,12 +13,21 @@ import {
 import HoverTooltip from './Tooltip';
 import type { PlayerProfile as PlayerProfileType } from '../types';
 
+type WindowKey = 'all' | '90d' | '30d' | '7d';
+const WINDOW_OPTIONS: { key: WindowKey; label: string; days: number | null }[] = [
+  { key: 'all', label: 'All-time', days: null },
+  { key: '90d', label: '90d', days: 90 },
+  { key: '30d', label: '30d', days: 30 },
+  { key: '7d', label: '7d', days: 7 },
+];
+
 export default function PlayerProfile() {
   const { id } = useParams<{ id: string }>();
   const [player, setPlayer] = useState<PlayerProfileType | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedH2H, setExpandedH2H] = useState<number | null>(null);
   const [updatingVacation, setUpdatingVacation] = useState(false);
+  const [windowKey, setWindowKey] = useState<WindowKey>('all');
 
   useEffect(() => {
     if (!id) return;
@@ -97,6 +106,7 @@ export default function PlayerProfile() {
       band: [number, number] | null;
       opponent: string;
       date: string;
+      ts: number | null;
     }[] = [
       {
         label: 'Start',
@@ -107,6 +117,7 @@ export default function PlayerProfile() {
             : null,
         opponent: '',
         date: '',
+        ts: null,
       },
     ];
 
@@ -130,14 +141,30 @@ export default function PlayerProfile() {
           month: 'short',
           day: 'numeric',
         }),
+        ts: new Date(m.createdAt).getTime(),
       });
     });
 
     return points;
   })();
 
+  // Windowed slice of the rating history for the chart. Carries the last point
+  // before the window as a baseline so the line enters at the right rating.
+  const chartData = (() => {
+    const opt = WINDOW_OPTIONS.find((o) => o.key === windowKey)!;
+    if (opt.days == null) return ratingHistory;
+    const cutoff = Date.now() - opt.days * 24 * 60 * 60 * 1000;
+    const within = ratingHistory.filter((pt) => pt.ts != null && pt.ts >= cutoff);
+    const before = ratingHistory.filter((pt) => pt.ts == null || pt.ts < cutoff);
+    const baseline = before.length
+      ? [{ ...before[before.length - 1], label: 'Start', opponent: '', date: '' }]
+      : [];
+    return [...baseline, ...within];
+  })();
+
   const yAxis = (() => {
-    const values = ratingHistory.flatMap((pt) =>
+    const source = chartData.length > 0 ? chartData : ratingHistory;
+    const values = source.flatMap((pt) =>
       pt.band ? [pt.band[0], pt.band[1]] : [pt.rating],
     );
     return niceAxis(Math.min(...values), Math.max(...values));
@@ -253,9 +280,28 @@ export default function PlayerProfile() {
       {/* Rating Chart */}
       {ratingHistory.length > 1 && (
         <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-6">
-          <h3 className="text-sm text-slate-400 mb-3">Skill History</h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm text-slate-400">Skill History</h3>
+            <div className="flex gap-1">
+              {WINDOW_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setWindowKey(opt.key)}
+                  className={`text-xs px-2 py-1 rounded transition-colors ${
+                    windowKey === opt.key
+                      ? 'bg-emerald-500/20 text-emerald-400'
+                      : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {chartData.length > 1 ? (
           <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={ratingHistory}>
+            <ComposedChart data={chartData}>
               <XAxis dataKey="label" hide />
               <YAxis
                 domain={yAxis.domain}
@@ -303,6 +349,11 @@ export default function PlayerProfile() {
               />
             </ComposedChart>
           </ResponsiveContainer>
+          ) : (
+            <div className="h-[320px] flex items-center justify-center text-sm text-slate-600">
+              No matches in this window.
+            </div>
+          )}
         </div>
       )}
 
