@@ -76,6 +76,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     longestLossStreakMatches: StreakMatchRef[];
     climbs: number;
     defenses: number;
+    climbGames: number;
+    defenseGames: number;
     upsetsCaused: number;
     upsetsSuffered: number;
     wins: number;
@@ -128,6 +130,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       longestLossStreakMatches: [],
       climbs: 0,
       defenses: 0,
+      climbGames: 0,
+      defenseGames: 0,
       upsetsCaused: 0,
       upsetsSuffered: 0,
       wins: 0,
@@ -313,11 +317,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       m.winnerRankBefore != null &&
       m.loserRankBefore != null
     ) {
-      // Challenger is the lower-ranked (higher rank number) player
+      // Challenger is the lower-ranked (higher rank number) player.
       if (m.winnerRankBefore > m.loserRankBefore) {
+        // Winner climbed and won; loser defended and lost.
         winner.climbs += 1;
+        winner.climbGames += 1;
+        loser.defenseGames += 1;
       } else {
+        // Winner defended and won; loser climbed and lost.
         winner.defenses += 1;
+        winner.defenseGames += 1;
+        loser.climbGames += 1;
       }
     }
 
@@ -489,7 +499,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     (p) => nemesisCounts.get(p.id) ?? 0,
   );
   const biggestOp = pickAllMax(playerList, (p) => rivalCounts.get(p.id) ?? 0);
-  const bestDefender = pickAllMax(playerList, (p) => acc.get(p.id)!.defenses);
+  const mostDefenses = pickAllMax(playerList, (p) => acc.get(p.id)!.defenses);
   const peak = pickAllMax(playerList, (p) => acc.get(p.id)!.peakRating ?? -Infinity);
   const currentTop = pickAllMax(playerList, (p) => acc.get(p.id)!.currentRating);
   // Win-rate stat requires a minimum match count so a single lucky win
@@ -523,6 +533,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   });
   const comebackArtist = pickAllMax(playerList, (p) => acc.get(p.id)!.comebacks);
   const bagels = pickAllMax(playerList, (p) => acc.get(p.id)!.bagels);
+
+  // Challenge win-rate stats. Require a minimum number of challenges in the
+  // relevant role so a single lucky challenge can't crown someone at 100%.
+  const MIN_CHALLENGE_GAMES = 5;
+  const bestClimberRate = pickAllMax(playerList, (p) => {
+    const a = acc.get(p.id)!;
+    return a.climbGames >= MIN_CHALLENGE_GAMES ? a.climbs / a.climbGames : -1;
+  });
+  const bestDefenderRate = pickAllMax(playerList, (p) => {
+    const a = acc.get(p.id)!;
+    return a.defenseGames >= MIN_CHALLENGE_GAMES ? a.defenses / a.defenseGames : -1;
+  });
+  const bestChallengerRate = pickAllMax(playerList, (p) => {
+    const a = acc.get(p.id)!;
+    const games = a.climbGames + a.defenseGames;
+    return games >= MIN_CHALLENGE_GAMES ? (a.climbs + a.defenses) / games : -1;
+  });
 
   // --- Hover detail lists for the stat winners (capped, built lazily so we
   // only pay for the players that actually top a stat) ---
@@ -588,6 +615,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           m.loserRankBefore != null &&
           m.winnerRankBefore <= m.loserRankBefore,
       )
+      .map((m) => detailFromMatch(m, pid))
+      .slice(-DETAIL_CAP);
+
+  // A player's role in a challenge: 'climb' (lower-ranked challenger) or
+  // 'defense' (higher-ranked defender); null if it isn't a ranked challenge.
+  const challengeRoleFor = (
+    m: AnyMatch,
+    pid: number,
+  ): 'climb' | 'defense' | null => {
+    if (!m.isChallenge || m.winnerRankBefore == null || m.loserRankBefore == null)
+      return null;
+    const isWinner = m.winnerId === pid;
+    const myRank = isWinner ? m.winnerRankBefore : m.loserRankBefore;
+    const oppRank = isWinner ? m.loserRankBefore : m.winnerRankBefore;
+    return myRank > oppRank ? 'climb' : 'defense';
+  };
+
+  // All challenge matches (wins and losses) a player played in a given role —
+  // the detail behind the challenge win-rate stats.
+  const climbMatchesFor = (pid: number): DetailMatch[] =>
+    matchesOf(pid)
+      .filter((m) => challengeRoleFor(m, pid) === 'climb')
+      .map((m) => detailFromMatch(m, pid))
+      .slice(-DETAIL_CAP);
+  const defenseMatchesFor = (pid: number): DetailMatch[] =>
+    matchesOf(pid)
+      .filter((m) => challengeRoleFor(m, pid) === 'defense')
+      .map((m) => detailFromMatch(m, pid))
+      .slice(-DETAIL_CAP);
+  const challengeMatchesFor = (pid: number): DetailMatch[] =>
+    matchesOf(pid)
+      .filter((m) => challengeRoleFor(m, pid) != null)
       .map((m) => detailFromMatch(m, pid))
       .slice(-DETAIL_CAP);
 
@@ -893,6 +952,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
   };
 
+  const wrapChallengeRate = (
+    best: { players: PlayerRef[]; score: number } | null,
+    winsGamesOf: (a: PlayerAcc) => [number, number],
+    matchesFor: (pid: number) => DetailMatch[],
+  ): {
+    entries: {
+      player: PlayerRef;
+      wins: number;
+      games: number;
+      matches: DetailMatch[];
+    }[];
+    rate: number;
+  } | null => {
+    if (!best || best.score < 0) return null;
+    return {
+      entries: best.players.map((pl) => {
+        const [wins, games] = winsGamesOf(acc.get(pl.id)!);
+        return { player: pl, wins, games, matches: matchesFor(pl.id) };
+      }),
+      rate: best.score,
+    };
+  };
+
   type StreakKind = 'currentWin' | 'longestWin' | 'currentLoss' | 'longestLoss';
   const wrapStreak = (
     best: { players: PlayerRef[]; score: number } | null,
@@ -1063,7 +1145,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     },
     ladder: {
       mostSuccessfulClimbs: wrapCountMatches(mostClimbs, climbWinsFor),
-      bestDefender: wrapCountMatches(bestDefender, defenseWinsFor),
+      mostSuccessfulDefenses: wrapCountMatches(mostDefenses, defenseWinsFor),
+      bestClimber: wrapChallengeRate(
+        bestClimberRate,
+        (a) => [a.climbs, a.climbGames],
+        climbMatchesFor,
+      ),
+      bestDefender: wrapChallengeRate(
+        bestDefenderRate,
+        (a) => [a.defenses, a.defenseGames],
+        defenseMatchesFor,
+      ),
+      bestChallenger: wrapChallengeRate(
+        bestChallengerRate,
+        (a) => [a.climbs + a.defenses, a.climbGames + a.defenseGames],
+        challengeMatchesFor,
+      ),
     },
     rivalries: {
       biggestRivalry,

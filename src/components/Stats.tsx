@@ -138,8 +138,14 @@ const TIPS = {
     'Highest win percentage among players with at least 10 matches',
   mostSuccessfulClimbs:
     'Career count of challenge matches won as the lower-ranked challenger',
-  bestDefender:
+  mostSuccessfulDefenses:
     'Career count of challenge matches won as the higher-ranked defender',
+  bestClimber:
+    'Win rate as the lower-ranked challenger (min 5 challenge matches)',
+  bestDefender:
+    'Win rate as the higher-ranked defender (min 5 challenge matches)',
+  bestChallenger:
+    'Win rate across all challenges, climbing or defending (min 5 challenges)',
   giantSlayer:
     'Career wins above expectation: how many more matches a player has won than the ratings predicted (min 10 rated games)',
   mostImprobableStreak:
@@ -1155,7 +1161,7 @@ export default function Stats() {
 
       {/* Challenge Ladder */}
       <h2 className="text-lg font-semibold mb-3">Challenge Ladder</h2>
-      <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 sm:gap-4">
+      <div className="grid grid-cols-1 gap-3 mb-3 sm:grid-cols-2 sm:gap-4">
         {stats.ladder.mostSuccessfulClimbs ? (
           <StatCard
             label="Most Successful Climbs"
@@ -1180,23 +1186,105 @@ export default function Stats() {
           />
         )}
 
+        {stats.ladder.mostSuccessfulDefenses ? (
+          <StatCard
+            label="Most Successful Defenses"
+            value={
+              <DetailValue entries={stats.ladder.mostSuccessfulDefenses.entries}>
+                {stats.ladder.mostSuccessfulDefenses.count}
+              </DetailValue>
+            }
+            valueClass="text-sky-400"
+            tooltip={TIPS.mostSuccessfulDefenses}
+          >
+            <PlayerLinks
+              players={stats.ladder.mostSuccessfulDefenses.entries.map(
+                (e) => e.player,
+              )}
+            />
+          </StatCard>
+        ) : (
+          <NoData
+            label="Most Successful Defenses"
+            tooltip={TIPS.mostSuccessfulDefenses}
+          />
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-3 sm:gap-4">
+        {stats.ladder.bestClimber ? (
+          <StatCard
+            label="Best Climber"
+            value={
+              <DetailValue entries={stats.ladder.bestClimber.entries}>
+                {`${(stats.ladder.bestClimber.rate * 100).toFixed(1)}%`}
+              </DetailValue>
+            }
+            valueClass="text-emerald-400"
+            tooltip={TIPS.bestClimber}
+          >
+            {stats.ladder.bestClimber.entries.map((e) => (
+              <div key={e.player.id}>
+                <PlayerLink player={e.player} />
+                <span className="text-slate-600">
+                  {' '}
+                  · {e.wins}-{e.games - e.wins}
+                </span>
+              </div>
+            ))}
+          </StatCard>
+        ) : (
+          <NoData label="Best Climber" tooltip={TIPS.bestClimber} />
+        )}
+
         {stats.ladder.bestDefender ? (
           <StatCard
             label="Best Defender"
             value={
               <DetailValue entries={stats.ladder.bestDefender.entries}>
-                {stats.ladder.bestDefender.count}
+                {`${(stats.ladder.bestDefender.rate * 100).toFixed(1)}%`}
               </DetailValue>
             }
             valueClass="text-sky-400"
             tooltip={TIPS.bestDefender}
           >
-            <PlayerLinks
-              players={stats.ladder.bestDefender.entries.map((e) => e.player)}
-            />
+            {stats.ladder.bestDefender.entries.map((e) => (
+              <div key={e.player.id}>
+                <PlayerLink player={e.player} />
+                <span className="text-slate-600">
+                  {' '}
+                  · {e.wins}-{e.games - e.wins}
+                </span>
+              </div>
+            ))}
           </StatCard>
         ) : (
           <NoData label="Best Defender" tooltip={TIPS.bestDefender} />
+        )}
+
+        {stats.ladder.bestChallenger ? (
+          <StatCard
+            label="Best Challenger"
+            value={
+              <DetailValue entries={stats.ladder.bestChallenger.entries}>
+                {`${(stats.ladder.bestChallenger.rate * 100).toFixed(1)}%`}
+              </DetailValue>
+            }
+            valueClass="text-amber-400"
+            tooltip={TIPS.bestChallenger}
+          >
+            {stats.ladder.bestChallenger.entries.map((e) => (
+              <div key={e.player.id}>
+                <PlayerLink player={e.player} />
+                <span className="text-slate-600">
+                  {' '}
+                  · {e.wins}-{e.games - e.wins}
+                </span>
+              </div>
+            ))}
+          </StatCard>
+        ) : (
+          <NoData label="Best Challenger" tooltip={TIPS.bestChallenger} />
         )}
       </div>
 
