@@ -6,6 +6,13 @@ import { isUpset, preMatchWinnerOdds } from '../../lib/glicko';
 import { hasPointScores } from '../../lib/games';
 import type { Match, Player } from '../types';
 import LogMatchModal from './LogMatchModal';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const PAGE_SIZE = 25;
 
@@ -176,34 +183,42 @@ export default function MatchHistory() {
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="flex-1">
           <label className="block text-xs text-slate-500 mb-1">Player</label>
-          <select
-            value={filter1}
-            onChange={(e) => setFilter1(e.target.value ? Number(e.target.value) : '')}
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
+          <Select
+            value={filter1 === '' ? 'all' : String(filter1)}
+            onValueChange={(v) => setFilter1(v === 'all' ? '' : Number(v))}
           >
-            <option value="">All players</option>
-            {players.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All players</SelectItem>
+              {players.map((p) => (
+                <SelectItem key={p.id} value={String(p.id)}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="flex-1">
           <label className="block text-xs text-slate-500 mb-1">vs. Player (optional)</label>
-          <select
-            value={filter2}
-            onChange={(e) => setFilter2(e.target.value ? Number(e.target.value) : '')}
+          <Select
+            value={filter2 === '' ? 'all' : String(filter2)}
+            onValueChange={(v) => setFilter2(v === 'all' ? '' : Number(v))}
             disabled={filter1 === ''}
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 disabled:opacity-50"
           >
-            <option value="">Any opponent</option>
-            {player2Options.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any opponent</SelectItem>
+              {player2Options.map((p) => (
+                <SelectItem key={p.id} value={String(p.id)}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         {(filter1 !== '' || filter2 !== '') && (
           <div className="flex items-end">

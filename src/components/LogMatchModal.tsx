@@ -6,6 +6,13 @@ import {
   seriesWinProbability,
 } from '../../lib/series';
 import type { Player, Match } from '../types';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 // Game targets the modal can score to.
 const GAME_TARGETS = [11, 21] as const;
@@ -331,43 +338,45 @@ export default function LogMatchModal({
               <label className="block text-sm text-slate-400 mb-1">
                 Player 1
               </label>
-              <select
-                value={player1Id}
-                onChange={(e) =>
-                  setPlayer1Id(e.target.value ? Number(e.target.value) : '')
-                }
+              <Select
+                value={player1Id === '' ? undefined : String(player1Id)}
+                onValueChange={(v) => setPlayer1Id(Number(v))}
                 disabled={!!preselectedPlayers}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                <option value="">Select...</option>
-                {availablePlayers.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full bg-slate-700 border-slate-600 disabled:opacity-70">
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availablePlayers.map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="block text-sm text-slate-400 mb-1">
                 Player 2
               </label>
-              <select
-                value={player2Id}
-                onChange={(e) =>
-                  setPlayer2Id(e.target.value ? Number(e.target.value) : '')
-                }
+              <Select
+                value={player2Id === '' ? undefined : String(player2Id)}
+                onValueChange={(v) => setPlayer2Id(Number(v))}
                 disabled={!!preselectedPlayers}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                <option value="">Select...</option>
-                {availablePlayers
-                  .filter((p) => p.id !== player1Id)
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-              </select>
+                <SelectTrigger className="w-full bg-slate-700 border-slate-600 disabled:opacity-70">
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availablePlayers
+                    .filter((p) => p.id !== player1Id)
+                    .map((p) => (
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
