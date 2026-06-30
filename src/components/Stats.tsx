@@ -414,6 +414,8 @@ function RatingHistoryChart({
         const prev = byDay.get(day);
         if (!prev || prev.t <= t) byDay.set(day, { day, t, rating: pt.rating });
       }
+      // Real in-window game-days, counted before the synthetic anchor below.
+      const inWindowGames = byDay.size;
       if (windowStart != null && preWindowRating != null) {
         const anchorDay = localDayKey(windowStart);
         if (!byDay.has(anchorDay)) {
@@ -425,13 +427,16 @@ function RatingHistoryChart({
         }
       }
       const data = [...byDay.values()].sort((a, b) => a.t - b.t);
-      return { ...p, data };
+      return { ...p, data, inWindowGames };
     });
   }, [players, windowKey]);
 
-  // Players that have any data in the current window — these populate the
-  // legend. `visibleSeries` is the subset the user hasn't toggled off.
-  const eligibleSeries = series.filter((s) => s.data.length > 0);
+  // Players that populate the legend / chart. For all-time, anyone with data
+  // qualifies; for a bounded window we require at least one *actual* match in
+  // the period (not just the synthetic pre-window anchor point).
+  const eligibleSeries = series.filter((s) =>
+    windowKey === 'all' ? s.data.length > 0 : s.inWindowGames > 0,
+  );
   const visibleSeries = eligibleSeries.filter((s) => !hiddenIds.has(s.id));
 
   // Union of game days across visible players, in chronological order.
