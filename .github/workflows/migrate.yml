@@ -31,7 +31,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx drizzle-kit migrate
+      - run: npm run db:migrate
         env:
           STORAGE_DATABASE_URL: ${{ secrets.STORAGE_DATABASE_URL }}
 
@@ -75,4 +75,4 @@ jobs:
         run: |
           STORAGE_DATABASE_URL="$(npx neonctl connection-string "$NEON_BRANCH" --project-id "$NEON_PROJECT_ID")"
           export STORAGE_DATABASE_URL
-          npx drizzle-kit migrate
+          npm run db:migrate
