@@ -443,34 +443,36 @@ export default function PlayerProfile() {
             </div>
           )}
         </div>
-        <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
+        <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-col">
           <h3 className="text-sm text-slate-400 mb-2">Recent Form</h3>
-          {player.recentForm.length > 0 ? (
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex gap-1">
-                {player.recentForm.map((result, i) => (
-                  <span
-                    key={i}
-                    className={`w-8 h-8 rounded flex items-center justify-center text-sm font-bold ${
-                      result === 'W'
-                        ? 'bg-emerald-500/20 text-emerald-400'
-                        : 'bg-red-500/20 text-red-400'
-                    }`}
-                  >
-                    {result}
-                  </span>
-                ))}
+          <div className="flex-1 flex items-center">
+            {player.recentForm.length > 0 ? (
+              <div className="flex items-center justify-between gap-2 w-full">
+                <div className="flex gap-1">
+                  {player.recentForm.map((result, i) => (
+                    <span
+                      key={i}
+                      className={`w-8 h-8 rounded flex items-center justify-center text-sm font-bold ${
+                        result === 'W'
+                          ? 'bg-emerald-500/20 text-emerald-400'
+                          : 'bg-red-500/20 text-red-400'
+                      }`}
+                    >
+                      {result}
+                    </span>
+                  ))}
+                </div>
+                <span
+                  className={`text-sm font-mono tabular-nums ${recentFormRating >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                >
+                  {recentFormRating >= 0 ? '+' : ''}
+                  {recentFormRating}
+                </span>
               </div>
-              <span
-                className={`text-sm font-mono tabular-nums ${recentFormRating >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
-              >
-                {recentFormRating >= 0 ? '+' : ''}
-                {recentFormRating}
-              </span>
-            </div>
-          ) : (
-            <span className="text-slate-500">No matches</span>
-          )}
+            ) : (
+              <span className="text-slate-500">No matches</span>
+            )}
+          </div>
         </div>
       </div>
 
