@@ -175,9 +175,21 @@ export interface StatsResponse {
       entries: { player: PlayerRef; matches: StreakMatch[] }[];
       count: number;
     } | null;
-    bestDefender: {
+    mostSuccessfulDefenses: {
       entries: { player: PlayerRef; matches: StreakMatch[] }[];
       count: number;
+    } | null;
+    bestClimber: {
+      entries: { player: PlayerRef; wins: number; games: number }[];
+      rate: number;
+    } | null;
+    bestDefender: {
+      entries: { player: PlayerRef; wins: number; games: number }[];
+      rate: number;
+    } | null;
+    bestChallenger: {
+      entries: { player: PlayerRef; wins: number; games: number }[];
+      rate: number;
     } | null;
   };
   rivalries: {
