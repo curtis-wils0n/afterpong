@@ -12,12 +12,23 @@ on:
 jobs:
   delete-branch:
     runs-on: ubuntu-latest
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+      NEON_BRANCH: preview/${{ github.head_ref }}
     steps:
-      - uses: neondatabase/delete-branch-action@v3
-        # A PR that never got a preview deploy has no branch to delete; don't
-        # fail the run over it.
-        continue-on-error: true
-        with:
-          project_id: ${{ secrets.NEON_PROJECT_ID }}
-          branch: preview/${{ github.head_ref }}
-          api_key: ${{ secrets.NEON_API_KEY }}
+      - name: Delete preview branch if it exists
+        # A PR that never got a preview deploy has no branch to delete — that's
+        # a clean no-op. Real failures (bad credentials, API errors) still fail
+        # the job instead of being swallowed by continue-on-error.
+        run: |
+          set -euo pipefail
+          # `branches list` fails loudly on auth/API errors, so a bad key fails
+          # the job here rather than being misread as "branch not found".
+          branches="$(npx neonctl branches list --project-id "$NEON_PROJECT_ID" --output json)"
+          if echo "$branches" | jq -e --arg b "$NEON_BRANCH" 'any(.[]; .name == $b)' > /dev/null; then
+            npx neonctl branches delete "$NEON_BRANCH" --project-id "$NEON_PROJECT_ID"
+            echo "Deleted $NEON_BRANCH"
+          else
+            echo "No preview branch $NEON_BRANCH; nothing to delete."
+          fi
