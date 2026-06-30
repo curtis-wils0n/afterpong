@@ -6,7 +6,11 @@ dist
 .vercel
 drizzle/
 .agents/
-.claude/
+.claude/*
+# Keep authored, repo-specific skills tracked (managed skills + worktrees stay ignored).
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/add-stat/
 skills-lock.json
 tsconfig.tsbuildinfo
 tsconfig.tsbuildinfo
