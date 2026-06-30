@@ -177,6 +177,47 @@ export default function PlayerProfile() {
     ? Math.min(...ratingHistory.map((p) => p.rating))
     : null;
 
+  // Longest career win / loss streaks (max consecutive results).
+  const { longestWinStreak, longestLossStreak } = (() => {
+    let maxW = 0;
+    let maxL = 0;
+    let curW = 0;
+    let curL = 0;
+    for (const m of player.matches) {
+      if (m.winnerId === player.id) {
+        curW += 1;
+        curL = 0;
+        if (curW > maxW) maxW = curW;
+      } else {
+        curL += 1;
+        curW = 0;
+        if (curL > maxL) maxL = curL;
+      }
+    }
+    return { longestWinStreak: maxW, longestLossStreak: maxL };
+  })();
+
+  // Win/loss record and net skill change over the chart's selected window.
+  const rangeStats = (() => {
+    const opt = WINDOW_OPTIONS.find((o) => o.key === windowKey)!;
+    const cutoff = opt.days != null ? Date.now() - opt.days * 24 * 60 * 60 * 1000 : null;
+    const inRange =
+      cutoff == null
+        ? player.matches
+        : player.matches.filter((m) => new Date(m.createdAt).getTime() >= cutoff);
+    const wins = inRange.filter((m) => m.winnerId === player.id).length;
+    const losses = inRange.length - wins;
+    const net = Math.round(
+      inRange.reduce(
+        (sum, m) =>
+          sum + (m.winnerId === player.id ? m.winnerRatingChange : m.loserRatingChange),
+        0,
+      ),
+    );
+    const rate = inRange.length > 0 ? Math.round((wins / inRange.length) * 100) : 0;
+    return { wins, losses, net, rate, count: inRange.length };
+  })();
+
   return (
     <div>
       <Link
@@ -354,6 +395,20 @@ export default function PlayerProfile() {
               No matches in this window.
             </div>
           )}
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm">
+            <span>
+              <span className="text-emerald-400 font-medium">{rangeStats.wins}W</span>
+              <span className="text-slate-600 mx-1">-</span>
+              <span className="text-red-400 font-medium">{rangeStats.losses}L</span>
+            </span>
+            <span className="text-slate-500">{rangeStats.rate}% win rate</span>
+            <span
+              className={`font-mono tabular-nums ${rangeStats.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+            >
+              {rangeStats.net >= 0 ? '+' : ''}
+              {rangeStats.net} skill
+            </span>
+          </div>
         </div>
       )}
 
@@ -379,35 +434,45 @@ export default function PlayerProfile() {
           ) : (
             <span className="text-slate-500">No matches</span>
           )}
-        </div>
-        <div className="bg-slate-800 border border-slate-700 rounded-lg p-4">
-          <h3 className="text-sm text-slate-400 mb-2">Recent Form</h3>
-          {player.recentForm.length > 0 ? (
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex gap-1">
-                {player.recentForm.map((result, i) => (
-                  <span
-                    key={i}
-                    className={`w-8 h-8 rounded flex items-center justify-center text-sm font-bold ${
-                      result === 'W'
-                        ? 'bg-emerald-500/20 text-emerald-400'
-                        : 'bg-red-500/20 text-red-400'
-                    }`}
-                  >
-                    {result}
-                  </span>
-                ))}
-              </div>
-              <span
-                className={`text-sm font-mono tabular-nums ${recentFormRating >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
-              >
-                {recentFormRating >= 0 ? '+' : ''}
-                {recentFormRating}
-              </span>
+          {player.matches.length > 0 && (
+            <div className="text-xs text-slate-500 mt-2">
+              Longest{' '}
+              <span className="text-emerald-400 font-medium">{longestWinStreak}W</span>
+              <span className="mx-1 text-slate-600">·</span>
+              <span className="text-red-400 font-medium">{longestLossStreak}L</span>
             </div>
-          ) : (
-            <span className="text-slate-500">No matches</span>
           )}
+        </div>
+        <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 flex flex-col">
+          <h3 className="text-sm text-slate-400 mb-2">Recent Form</h3>
+          <div className="flex-1 flex items-center">
+            {player.recentForm.length > 0 ? (
+              <div className="flex items-center justify-between gap-2 w-full">
+                <div className="flex gap-1">
+                  {player.recentForm.map((result, i) => (
+                    <span
+                      key={i}
+                      className={`w-8 h-8 rounded flex items-center justify-center text-sm font-bold ${
+                        result === 'W'
+                          ? 'bg-emerald-500/20 text-emerald-400'
+                          : 'bg-red-500/20 text-red-400'
+                      }`}
+                    >
+                      {result}
+                    </span>
+                  ))}
+                </div>
+                <span
+                  className={`text-sm font-mono tabular-nums ${recentFormRating >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                >
+                  {recentFormRating >= 0 ? '+' : ''}
+                  {recentFormRating}
+                </span>
+              </div>
+            ) : (
+              <span className="text-slate-500">No matches</span>
+            )}
+          </div>
         </div>
       </div>
 
