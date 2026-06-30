@@ -180,15 +180,15 @@ export interface StatsResponse {
       count: number;
     } | null;
     bestClimber: {
-      entries: { player: PlayerRef; wins: number; games: number }[];
+      entries: { player: PlayerRef; wins: number; games: number; matches: StreakMatch[] }[];
       rate: number;
     } | null;
     bestDefender: {
-      entries: { player: PlayerRef; wins: number; games: number }[];
+      entries: { player: PlayerRef; wins: number; games: number; matches: StreakMatch[] }[];
       rate: number;
     } | null;
     bestChallenger: {
-      entries: { player: PlayerRef; wins: number; games: number }[];
+      entries: { player: PlayerRef; wins: number; games: number; matches: StreakMatch[] }[];
       rate: number;
     } | null;
   };

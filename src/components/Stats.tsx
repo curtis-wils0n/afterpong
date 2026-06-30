@@ -1215,7 +1215,11 @@ export default function Stats() {
         {stats.ladder.bestClimber ? (
           <StatCard
             label="Best Climber"
-            value={`${(stats.ladder.bestClimber.rate * 100).toFixed(1)}%`}
+            value={
+              <DetailValue entries={stats.ladder.bestClimber.entries}>
+                {`${(stats.ladder.bestClimber.rate * 100).toFixed(1)}%`}
+              </DetailValue>
+            }
             valueClass="text-emerald-400"
             tooltip={TIPS.bestClimber}
           >
@@ -1236,7 +1240,11 @@ export default function Stats() {
         {stats.ladder.bestDefender ? (
           <StatCard
             label="Best Defender"
-            value={`${(stats.ladder.bestDefender.rate * 100).toFixed(1)}%`}
+            value={
+              <DetailValue entries={stats.ladder.bestDefender.entries}>
+                {`${(stats.ladder.bestDefender.rate * 100).toFixed(1)}%`}
+              </DetailValue>
+            }
             valueClass="text-sky-400"
             tooltip={TIPS.bestDefender}
           >
@@ -1257,7 +1265,11 @@ export default function Stats() {
         {stats.ladder.bestChallenger ? (
           <StatCard
             label="Best Challenger"
-            value={`${(stats.ladder.bestChallenger.rate * 100).toFixed(1)}%`}
+            value={
+              <DetailValue entries={stats.ladder.bestChallenger.entries}>
+                {`${(stats.ladder.bestChallenger.rate * 100).toFixed(1)}%`}
+              </DetailValue>
+            }
             valueClass="text-amber-400"
             tooltip={TIPS.bestChallenger}
           >
