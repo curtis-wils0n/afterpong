@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, Tooltip } from 'recharts';
 import { toast } from 'sonner';
@@ -30,15 +30,31 @@ export default function PlayerProfile() {
   const [expandedH2H, setExpandedH2H] = useState<number | null>(null);
   const [updatingVacation, setUpdatingVacation] = useState(false);
   const [windowKey, setWindowKey] = useState<WindowKey>('all');
+  const MATCH_PAGE_SIZE = 20;
+  const [visibleMatchCount, setVisibleMatchCount] = useState(MATCH_PAGE_SIZE);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!id) return;
+    setVisibleMatchCount(MATCH_PAGE_SIZE);
     api.players
       .get(Number(id))
       .then(setPlayer)
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        setVisibleMatchCount((c) => c + MATCH_PAGE_SIZE);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [player]);
 
   const handleToggleVacation = async () => {
     if (!player || updatingVacation) return;
@@ -680,7 +696,7 @@ export default function PlayerProfile() {
         <div>
           <h2 className="text-lg font-semibold mb-3">Match History</h2>
           <div className="space-y-2">
-            {player.matches.map((match) => {
+            {player.matches.slice(0, visibleMatchCount).map((match) => {
               const won = match.winnerId === player.id;
               const ratingChange = Math.round(
                 won ? match.winnerRatingChange : match.loserRatingChange,
@@ -795,6 +811,11 @@ export default function PlayerProfile() {
               );
             })}
           </div>
+          {visibleMatchCount < player.matches.length && (
+            <div ref={loadMoreRef} className="h-8 flex items-center justify-center text-xs text-slate-600">
+              Loading more...
+            </div>
+          )}
         </div>
       )}
     </div>
