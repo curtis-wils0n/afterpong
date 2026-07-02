@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, forwardRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ResponsiveContainer,
@@ -18,16 +18,20 @@ import type {
   StreakMatch,
 } from '../types';
 
-function PlayerLink({ player }: { player: PlayerRef }) {
-  return (
+// forwardRef so it can be a Radix TooltipTrigger `asChild` (Radix uses the
+// trigger ref as its positioning anchor).
+const PlayerLink = forwardRef<HTMLAnchorElement, { player: PlayerRef }>(
+  ({ player }, ref) => (
     <Link
+      ref={ref}
       to={`/players/${player.id}`}
       className="hover:text-emerald-400 transition-colors"
     >
       {player.name}
     </Link>
-  );
-}
+  ),
+);
+PlayerLink.displayName = 'PlayerLink';
 
 function PlayerLinks({ players }: { players: PlayerRef[] }) {
   return (
