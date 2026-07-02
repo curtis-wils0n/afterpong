@@ -6,6 +6,7 @@ import { isUpset, preMatchWinnerOdds } from '../../lib/glicko';
 import { hasPointScores } from '../../lib/games';
 import type { Match, Player } from '../types';
 import LogMatchModal from './LogMatchModal';
+import { Combobox } from '@/components/ui/combobox';
 
 const PAGE_SIZE = 25;
 
@@ -176,34 +177,28 @@ export default function MatchHistory() {
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="flex-1">
           <label className="block text-xs text-slate-500 mb-1">Player</label>
-          <select
-            value={filter1}
-            onChange={(e) => setFilter1(e.target.value ? Number(e.target.value) : '')}
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
-          >
-            <option value="">All players</option>
-            {players.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <Combobox
+            options={[
+              { value: 'all', label: 'All players' },
+              ...players.map((p) => ({ value: String(p.id), label: p.name })),
+            ]}
+            value={filter1 === '' ? 'all' : String(filter1)}
+            onChange={(v) => setFilter1(v === 'all' ? '' : Number(v))}
+            searchPlaceholder="Search players…"
+          />
         </div>
         <div className="flex-1">
           <label className="block text-xs text-slate-500 mb-1">vs. Player (optional)</label>
-          <select
-            value={filter2}
-            onChange={(e) => setFilter2(e.target.value ? Number(e.target.value) : '')}
+          <Combobox
+            options={[
+              { value: 'all', label: 'Any opponent' },
+              ...player2Options.map((p) => ({ value: String(p.id), label: p.name })),
+            ]}
+            value={filter2 === '' ? 'all' : String(filter2)}
+            onChange={(v) => setFilter2(v === 'all' ? '' : Number(v))}
             disabled={filter1 === ''}
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 disabled:opacity-50"
-          >
-            <option value="">Any opponent</option>
-            {player2Options.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            searchPlaceholder="Search players…"
+          />
         </div>
         {(filter1 !== '' || filter2 !== '') && (
           <div className="flex items-end">
