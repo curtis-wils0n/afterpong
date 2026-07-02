@@ -7,6 +7,8 @@ import {
 } from '../../lib/series';
 import type { Player, Match } from '../types';
 import { Combobox } from '@/components/ui/combobox';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 // Game targets the modal can score to.
 const GAME_TARGETS = [11, 21] as const;
@@ -555,13 +557,14 @@ export default function LogMatchModal({
                           {player2.name}
                         </button>
                         {gameScores.length > 1 && (
-                          <button
-                            type="button"
+                          <Button
+                            variant="destructive"
+                            size="icon"
                             onClick={() => removeGame(index)}
-                            className="text-slate-500 hover:text-red-400 text-sm w-5 shrink-0 text-center transition-colors"
+                            className="shrink-0"
                           >
                             &times;
-                          </button>
+                          </Button>
                         )}
                       </div>
                     );
@@ -570,14 +573,14 @@ export default function LogMatchModal({
                   return (
                     <div key={index} className="flex items-center gap-2">
                       <span className={gameLabelClass}>G{index + 1}</span>
-                      <input
+                      <Input
                         type="number"
                         min="0"
                         value={game.player1Score}
                         onChange={(e) =>
                           updateGameScore(index, 'player1Score', e.target.value)
                         }
-                        className={`flex-1 min-w-0 bg-slate-700 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-center ${
+                        className={`flex-1 min-w-0 bg-slate-700 py-1.5 text-center ${
                           p1Won
                             ? 'border-emerald-500/40'
                             : p2Won
@@ -586,14 +589,14 @@ export default function LogMatchModal({
                         }`}
                       />
                       <span className="text-slate-600 text-sm shrink-0">-</span>
-                      <input
+                      <Input
                         type="number"
                         min="0"
                         value={game.player2Score}
                         onChange={(e) =>
                           updateGameScore(index, 'player2Score', e.target.value)
                         }
-                        className={`flex-1 min-w-0 bg-slate-700 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500 text-center ${
+                        className={`flex-1 min-w-0 bg-slate-700 py-1.5 text-center ${
                           p2Won
                             ? 'border-emerald-500/40'
                             : p1Won
@@ -602,13 +605,14 @@ export default function LogMatchModal({
                         }`}
                       />
                       {gameScores.length > 1 && (
-                        <button
-                          type="button"
+                        <Button
+                          variant="destructive"
+                          size="icon"
                           onClick={() => removeGame(index)}
-                          className="text-slate-500 hover:text-red-400 text-sm w-5 shrink-0 text-center transition-colors"
+                          className="shrink-0"
                         >
                           &times;
-                        </button>
+                        </Button>
                       )}
                     </div>
                   );
@@ -653,18 +657,10 @@ export default function LogMatchModal({
 
           {error && <p className="text-red-400 text-sm">{error}</p>}
           <div className="flex gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
+            <Button type="button" variant="secondary" size="sm" onClick={onClose} className="flex-1">
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
+            </Button>
+            <Button type="submit" size="sm" disabled={!canSubmit} className="flex-1">
               {submitting
                 ? 'Logging...'
                 : winnerName
@@ -672,7 +668,7 @@ export default function LogMatchModal({
                   : trackPoints
                     ? 'Enter scores...'
                     : 'Pick game winners...'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

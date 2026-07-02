@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../lib/auth';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 export default function Login() {
   const { login } = useAuth();
@@ -35,23 +37,19 @@ export default function Login() {
             <label className="block text-sm text-slate-400 mb-1">
               Password
             </label>
-            <input
+            <Input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500 placeholder-slate-500"
+              className="w-full bg-slate-700 border-slate-600 text-base text-white"
               placeholder="Enter password"
               autoFocus
             />
           </div>
           {error && <p className="text-red-400 text-sm">{error}</p>}
-          <button
-            type="submit"
-            disabled={!password || submitting}
-            className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 py-2 rounded-lg text-white font-medium transition-colors"
-          >
+          <Button type="submit" disabled={!password || submitting} className="w-full">
             {submitting ? 'Logging in...' : 'Log in'}
-          </button>
+          </Button>
         </form>
       </div>
     </div>
