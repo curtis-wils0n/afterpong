@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type { TournamentDetail as TournamentDetailType, TournamentMatch, Player } from '../types';
@@ -50,7 +51,7 @@ export default function TournamentDetail() {
       await api.tournaments.delete(tournament.id);
       navigate('/tournaments');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to cancel tournament');
+      toast.error(err instanceof Error ? err.message : 'Failed to cancel tournament');
     }
   };
 
