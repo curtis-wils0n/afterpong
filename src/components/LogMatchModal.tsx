@@ -8,7 +8,6 @@ import {
 import type { Player, Match } from '../types';
 import { Combobox } from '@/components/ui/combobox';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -18,6 +17,79 @@ import {
 
 // Game targets the modal can score to.
 const GAME_TARGETS = [11, 21] as const;
+
+function ScoreStepChevron({ up }: { up?: boolean }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d={up ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} />
+    </svg>
+  );
+}
+
+// ponytail: scores are the only numeric inputs, so this stepper lives here
+// rather than as a ui/NumberInput primitive. Promote it if another numeric
+// input shows up.
+function ScoreInput({
+  value,
+  onChange,
+  borderClass,
+  label,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  borderClass: string;
+  label: string;
+}) {
+  const step = (dir: number) => {
+    const n = parseInt(value, 10);
+    onChange(String(Math.max(0, (Number.isNaN(n) ? 0 : n) + dir)));
+  };
+  return (
+    <div
+      className={`relative flex flex-1 min-w-0 items-stretch rounded-lg border bg-slate-700 ${borderClass} focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/40`}
+    >
+      <input
+        type="number"
+        inputMode="numeric"
+        min="0"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={label}
+        className="w-full min-w-0 bg-transparent py-1.5 pl-2 pr-6 text-center text-sm text-slate-200 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
+      <div className="absolute inset-y-0 right-0 flex w-6 flex-col border-l border-slate-600/70">
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label={`Increase ${label}`}
+          onClick={() => step(1)}
+          className="flex flex-1 items-center justify-center text-slate-400 transition-colors hover:bg-slate-600/50 hover:text-emerald-400"
+        >
+          <ScoreStepChevron up />
+        </button>
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label={`Decrease ${label}`}
+          onClick={() => step(-1)}
+          className="flex flex-1 items-center justify-center border-t border-slate-600/70 text-slate-400 transition-colors hover:bg-slate-600/50 hover:text-emerald-400"
+        >
+          <ScoreStepChevron />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // Per-game head-to-head record for `player1Id` across matches that are all
 // between the two selected players. Games are stored in match-winner
@@ -575,36 +647,30 @@ export default function LogMatchModal({
                   return (
                     <div key={index} className="flex items-center gap-2">
                       <span className={gameLabelClass}>G{index + 1}</span>
-                      <Input
-                        type="number"
-                        min="0"
+                      <ScoreInput
                         value={game.player1Score}
-                        onChange={(e) =>
-                          updateGameScore(index, 'player1Score', e.target.value)
-                        }
-                        className={`flex-1 min-w-0 bg-slate-700 py-1.5 text-center ${
+                        onChange={(v) => updateGameScore(index, 'player1Score', v)}
+                        label={`Game ${index + 1} player 1 score`}
+                        borderClass={
                           p1Won
                             ? 'border-emerald-500/40'
                             : p2Won
                               ? 'border-red-500/30'
                               : 'border-slate-600'
-                        }`}
+                        }
                       />
                       <span className="text-slate-600 text-sm shrink-0">-</span>
-                      <Input
-                        type="number"
-                        min="0"
+                      <ScoreInput
                         value={game.player2Score}
-                        onChange={(e) =>
-                          updateGameScore(index, 'player2Score', e.target.value)
-                        }
-                        className={`flex-1 min-w-0 bg-slate-700 py-1.5 text-center ${
+                        onChange={(v) => updateGameScore(index, 'player2Score', v)}
+                        label={`Game ${index + 1} player 2 score`}
+                        borderClass={
                           p2Won
                             ? 'border-emerald-500/40'
                             : p1Won
                               ? 'border-red-500/30'
                               : 'border-slate-600'
-                        }`}
+                        }
                       />
                       {gameScores.length > 1 && (
                         <Button
