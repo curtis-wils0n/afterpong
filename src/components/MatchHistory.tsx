@@ -6,13 +6,7 @@ import { isUpset, preMatchWinnerOdds } from '../../lib/glicko';
 import { hasPointScores } from '../../lib/games';
 import type { Match, Player } from '../types';
 import LogMatchModal from './LogMatchModal';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 
 const PAGE_SIZE = 25;
 
@@ -183,42 +177,28 @@ export default function MatchHistory() {
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="flex-1">
           <label className="block text-xs text-slate-500 mb-1">Player</label>
-          <Select
+          <Combobox
+            options={[
+              { value: 'all', label: 'All players' },
+              ...players.map((p) => ({ value: String(p.id), label: p.name })),
+            ]}
             value={filter1 === '' ? 'all' : String(filter1)}
-            onValueChange={(v) => setFilter1(v === 'all' ? '' : Number(v))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All players</SelectItem>
-              {players.map((p) => (
-                <SelectItem key={p.id} value={String(p.id)}>
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onChange={(v) => setFilter1(v === 'all' ? '' : Number(v))}
+            searchPlaceholder="Search players…"
+          />
         </div>
         <div className="flex-1">
           <label className="block text-xs text-slate-500 mb-1">vs. Player (optional)</label>
-          <Select
+          <Combobox
+            options={[
+              { value: 'all', label: 'Any opponent' },
+              ...player2Options.map((p) => ({ value: String(p.id), label: p.name })),
+            ]}
             value={filter2 === '' ? 'all' : String(filter2)}
-            onValueChange={(v) => setFilter2(v === 'all' ? '' : Number(v))}
+            onChange={(v) => setFilter2(v === 'all' ? '' : Number(v))}
             disabled={filter1 === ''}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Any opponent</SelectItem>
-              {player2Options.map((p) => (
-                <SelectItem key={p.id} value={String(p.id)}>
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            searchPlaceholder="Search players…"
+          />
         </div>
         {(filter1 !== '' || filter2 !== '') && (
           <div className="flex items-end">
