@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { conservativeRating } from '../../lib/glicko';
 import type { Player } from '../types';
@@ -47,7 +48,7 @@ export default function Leaderboard() {
       setNewPlayerName('');
       await fetchPlayers();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to add player');
+      toast.error(err instanceof Error ? err.message : 'Failed to add player');
     } finally {
       setAdding(false);
     }

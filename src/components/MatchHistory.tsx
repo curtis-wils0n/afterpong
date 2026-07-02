@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { isUpset, preMatchWinnerOdds } from '../../lib/glicko';
@@ -130,7 +131,7 @@ export default function MatchHistory() {
       await api.matches.delete(match.id);
       reload();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete match');
+      toast.error(err instanceof Error ? err.message : 'Failed to delete match');
     } finally {
       setDeletingId(null);
     }
@@ -143,7 +144,7 @@ export default function MatchHistory() {
       await api.matches.deleteLast();
       reload();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to undo match');
+      toast.error(err instanceof Error ? err.message : 'Failed to undo match');
     } finally {
       setUndoing(false);
     }

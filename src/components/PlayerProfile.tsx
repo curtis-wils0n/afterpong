@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, Tooltip } from 'recharts';
+import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { isUpset, expectedScore, conservativeRating } from '../../lib/glicko';
 import { hasPointScores } from '../../lib/games';
@@ -46,7 +47,7 @@ export default function PlayerProfile() {
       const updated = await api.players.setVacation(player.id, !player.onVacation);
       setPlayer({ ...player, onVacation: updated.onVacation });
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update vacation status');
+      toast.error(err instanceof Error ? err.message : 'Failed to update vacation status');
     } finally {
       setUpdatingVacation(false);
     }
