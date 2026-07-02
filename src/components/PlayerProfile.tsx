@@ -11,6 +11,7 @@ import {
   computeFriend,
 } from '../../lib/badges';
 import HoverTooltip from './Tooltip';
+import { Badge } from '@/components/ui/badge';
 import type { PlayerProfile as PlayerProfileType } from '../types';
 
 type WindowKey = 'all' | '90d' | '30d' | '7d';
@@ -234,12 +235,12 @@ export default function PlayerProfile() {
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl font-bold">{player.name}</h1>
               {player.onVacation && (
-                <span
-                  className="text-sky-400 text-xs font-medium px-2 py-0.5 bg-sky-400/10 rounded-full"
+                <Badge
+                  color="sky"
                   title="Hidden from new matches. Ladder position is held until they return."
                 >
                   ON VACATION
-                </span>
+                </Badge>
               )}
               <button
                 type="button"
@@ -537,19 +538,13 @@ export default function PlayerProfile() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium">{h2h.opponent.name}</span>
                         {h2h.opponent.id === nemesisId && (
-                          <span className="text-red-400 text-xs font-medium px-2 py-0.5 bg-red-400/10 rounded-full">
-                            NEMESIS
-                          </span>
+                          <Badge color="red">NEMESIS</Badge>
                         )}
                         {h2h.opponent.id === rivalId && (
-                          <span className="text-amber-400 text-xs font-medium px-2 py-0.5 bg-amber-400/10 rounded-full">
-                            RIVAL
-                          </span>
+                          <Badge color="amber">RIVAL</Badge>
                         )}
                         {h2h.opponent.id === friendId && (
-                          <span className="text-sky-400 text-xs font-medium px-2 py-0.5 bg-sky-400/10 rounded-full">
-                            FRIEND
-                          </span>
+                          <Badge color="sky">FRIEND</Badge>
                         )}
                         <Link
                           to={`/players/${h2h.opponent.id}`}
@@ -652,19 +647,13 @@ export default function PlayerProfile() {
                                     </span>
                                   ) : null}
                                 {match.tournamentMatchId != null && (
-                                  <span className="text-amber-400 text-xs font-medium px-1.5 py-0.5 bg-amber-400/10 rounded-full">
-                                    TOURNAMENT
-                                  </span>
+                                  <Badge color="amber" className="px-1.5">TOURNAMENT</Badge>
                                 )}
                                 {match.isChallenge && (
-                                  <span className="text-purple-400 text-xs font-medium px-1.5 py-0.5 bg-purple-400/10 rounded-full">
-                                    CHALLENGE
-                                  </span>
+                                  <Badge color="purple" className="px-1.5">CHALLENGE</Badge>
                                 )}
                                 {isUpset(match) && (
-                                  <span className="text-yellow-400 text-xs font-medium px-1.5 py-0.5 bg-yellow-400/10 rounded-full">
-                                    UPSET
-                                  </span>
+                                  <Badge color="yellow" className="px-1.5">UPSET</Badge>
                                 )}
                               </div>
                               <span
@@ -752,21 +741,9 @@ export default function PlayerProfile() {
 
               const badges = (
                 <>
-                  {isTournament && (
-                    <span className="text-amber-400 text-xs font-medium px-2 py-0.5 bg-amber-400/10 rounded-full">
-                      TOURNAMENT
-                    </span>
-                  )}
-                  {match.isChallenge && (
-                    <span className="text-purple-400 text-xs font-medium px-2 py-0.5 bg-purple-400/10 rounded-full">
-                      CHALLENGE
-                    </span>
-                  )}
-                  {isUpset(match) && (
-                    <span className="text-yellow-400 text-xs font-medium px-2 py-0.5 bg-yellow-400/10 rounded-full">
-                      UPSET
-                    </span>
-                  )}
+                  {isTournament && <Badge color="amber">TOURNAMENT</Badge>}
+                  {match.isChallenge && <Badge color="purple">CHALLENGE</Badge>}
+                  {isUpset(match) && <Badge color="yellow">UPSET</Badge>}
                 </>
               );
 

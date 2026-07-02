@@ -4,6 +4,8 @@ import { api } from '../lib/api';
 import { seedParticipants, buildRoundOneSlots } from '../../lib/bracket';
 import { conservativeRating } from '../../lib/glicko';
 import type { Player, TournamentSeeding } from '../types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 interface Props {
   onClose: () => void;
@@ -86,12 +88,12 @@ export default function CreateTournamentModal({ onClose, onCreated }: Props) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-slate-400 mb-1">Name</label>
-            <input
+            <Input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Spring 2026 Showdown"
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
+              className="w-full bg-slate-700 border-slate-600"
               autoFocus
             />
           </div>
@@ -182,20 +184,17 @@ export default function CreateTournamentModal({ onClose, onCreated }: Props) {
           {error && <p className="text-red-400 text-sm">{error}</p>}
 
           <div className="flex gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
+            <Button type="button" variant="secondary" size="sm" onClick={onClose} className="flex-1">
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
+              size="sm"
               disabled={!name.trim() || selected.size < 2 || submitting}
-              className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              className="flex-1"
             >
               {submitting ? 'Creating...' : 'Create Tournament'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

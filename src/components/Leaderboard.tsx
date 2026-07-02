@@ -4,6 +4,9 @@ import { api } from '../lib/api';
 import { conservativeRating } from '../../lib/glicko';
 import type { Player } from '../types';
 import LogMatchModal from './LogMatchModal';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 
 const displayRating = (p: Player) => Math.round(conservativeRating(p));
 // Shown uncertainty is 2×RD, derived so the arithmetic is exact on screen:
@@ -82,30 +85,22 @@ export default function Leaderboard() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Leaderboard</h1>
-        <button
-          onClick={() => setShowLogMatch(true)}
-          disabled={players.length < 2}
-          className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg font-medium transition-colors"
-        >
+        <Button onClick={() => setShowLogMatch(true)} disabled={players.length < 2}>
           Log Match
-        </button>
+        </Button>
       </div>
 
       <form onSubmit={handleAddPlayer} className="mb-6 flex gap-2">
-        <input
+        <Input
           type="text"
           value={newPlayerName}
           onChange={(e) => setNewPlayerName(e.target.value)}
           placeholder="Add a player..."
-          className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 placeholder-slate-500"
+          className="flex-1"
         />
-        <button
-          type="submit"
-          disabled={!newPlayerName.trim() || adding}
-          className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-        >
+        <Button type="submit" variant="secondary" size="sm" disabled={!newPlayerName.trim() || adding}>
           Add
-        </button>
+        </Button>
       </form>
 
       {loading ? (
@@ -134,9 +129,9 @@ export default function Leaderboard() {
               <span className="flex-1 font-medium group-hover:text-emerald-400 transition-colors flex items-center gap-2">
                 <span>{player.name}</span>
                 {player.onVacation && (
-                  <span className="text-sky-400 text-[10px] font-medium px-1.5 py-0.5 bg-sky-400/10 rounded-full">
+                  <Badge color="sky" className="text-[10px] px-1.5">
                     VACATION
-                  </span>
+                  </Badge>
                 )}
               </span>
               {player.wins != null && player.losses != null && (

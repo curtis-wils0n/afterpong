@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type { Tournament } from '../types';
 import CreateTournamentModal from './CreateTournamentModal';
+import { Button } from '@/components/ui/button';
 
 export default function Tournaments() {
   const { isAdmin } = useAuth();
@@ -47,12 +48,7 @@ export default function Tournaments() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Tournaments</h1>
         {isAdmin && !active && (
-          <button
-            onClick={() => setShowCreate(true)}
-            className="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg font-medium transition-colors"
-          >
-            Create Tournament
-          </button>
+          <Button onClick={() => setShowCreate(true)}>Create Tournament</Button>
         )}
       </div>
 

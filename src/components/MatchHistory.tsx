@@ -7,6 +7,8 @@ import { hasPointScores } from '../../lib/games';
 import type { Match, Player } from '../types';
 import LogMatchModal from './LogMatchModal';
 import { Combobox } from '@/components/ui/combobox';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 const PAGE_SIZE = 25;
 
@@ -165,13 +167,9 @@ export default function MatchHistory() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Match History</h1>
-        <button
-          onClick={() => setShowLogMatch(true)}
-          disabled={players.length < 2}
-          className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg font-medium transition-colors"
-        >
+        <Button onClick={() => setShowLogMatch(true)} disabled={players.length < 2}>
           Log Match
-        </button>
+        </Button>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -202,15 +200,16 @@ export default function MatchHistory() {
         </div>
         {(filter1 !== '' || filter2 !== '') && (
           <div className="flex items-end">
-            <button
+            <Button
+              variant="ghost"
               onClick={() => {
                 setFilter1('');
                 setFilter2('');
               }}
-              className="text-xs text-slate-400 hover:text-slate-200 bg-slate-700/50 hover:bg-slate-700 px-3 py-2 rounded-lg transition-colors"
+              className="text-xs px-3 py-2 bg-slate-700/50 hover:bg-slate-700 hover:text-slate-200"
             >
               Clear
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -278,19 +277,13 @@ export default function MatchHistory() {
                     </span>
                   )}
                   {isTournament && (
-                    <span className="text-amber-400 text-xs font-medium px-2 py-0.5 bg-amber-400/10 rounded-full">
-                      TOURNAMENT
-                    </span>
+                    <Badge color="amber">TOURNAMENT</Badge>
                   )}
                   {match.isChallenge && (
-                    <span className="text-purple-400 text-xs font-medium px-2 py-0.5 bg-purple-400/10 rounded-full">
-                      CHALLENGE
-                    </span>
+                    <Badge color="purple">CHALLENGE</Badge>
                   )}
                   {isUpset(match) && (
-                    <span className="text-yellow-400 text-xs font-medium px-2 py-0.5 bg-yellow-400/10 rounded-full">
-                      UPSET
-                    </span>
+                    <Badge color="yellow">UPSET</Badge>
                   )}
                 </>
               );
@@ -319,7 +312,9 @@ export default function MatchHistory() {
               const actionBusy = isMostRecent ? undoing : deletingId === match.id;
               const actionBtn =
                 isMostRecent || (isAdmin && !isTournament) ? (
-                  <button
+                  <Button
+                    variant="destructive"
+                    size="icon"
                     onClick={() => (isMostRecent ? handleUndo() : handleDelete(match))}
                     disabled={actionBusy}
                     title={
@@ -327,10 +322,10 @@ export default function MatchHistory() {
                         ? 'Undo most recent match (reverts rating and ladder changes)'
                         : 'Delete match and recompute ratings'
                     }
-                    className="opacity-100 sm:opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-slate-600 hover:text-red-400 text-sm w-4 shrink-0 disabled:opacity-50"
+                    className="w-4 shrink-0 text-slate-600 opacity-100 sm:opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
                   >
                     {actionBusy ? '…' : '×'}
-                  </button>
+                  </Button>
                 ) : null;
 
               return (

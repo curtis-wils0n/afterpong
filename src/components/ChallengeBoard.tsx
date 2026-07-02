@@ -4,6 +4,9 @@ import { api } from '../lib/api';
 import { conservativeRating } from '../../lib/glicko';
 import type { Player } from '../types';
 import LogMatchModal from './LogMatchModal';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 
 export default function ChallengeBoard() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -99,31 +102,23 @@ export default function ChallengeBoard() {
               Clear selection
             </button>
           )}
-          <button
-            onClick={() => setShowLogMatch(true)}
-            disabled={players.length < 2}
-            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg font-medium transition-colors"
-          >
+          <Button onClick={() => setShowLogMatch(true)} disabled={players.length < 2}>
             Log Match
-          </button>
+          </Button>
         </div>
       </div>
 
       <form onSubmit={handleAddPlayer} className="mb-6 flex gap-2">
-        <input
+        <Input
           type="text"
           value={newPlayerName}
           onChange={(e) => setNewPlayerName(e.target.value)}
           placeholder="Add a player..."
-          className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 placeholder-slate-500"
+          className="flex-1"
         />
-        <button
-          type="submit"
-          disabled={!newPlayerName.trim() || adding}
-          className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-        >
+        <Button type="submit" variant="secondary" size="sm" disabled={!newPlayerName.trim() || adding}>
           Add
-        </button>
+        </Button>
       </form>
 
       {selectedChallenger && (
@@ -199,9 +194,9 @@ export default function ChallengeBoard() {
                   >
                     <span>{player.name}</span>
                     {isVacation && (
-                      <span className="text-sky-400 text-[10px] font-medium px-1.5 py-0.5 bg-sky-400/10 rounded-full">
+                      <Badge color="sky" className="text-[10px] px-1.5">
                         VACATION
-                      </span>
+                      </Badge>
                     )}
                   </Link>
                   <div className="hidden w-20 shrink-0 sm:flex justify-end gap-0.5">
@@ -222,12 +217,14 @@ export default function ChallengeBoard() {
                 </div>
                 <div className="w-20 shrink-0 flex justify-end sm:w-24">
                   {!selectedChallenger && canChallenge && !isVacation && (
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="xs"
                       onClick={() => setSelectedChallenger(player.id)}
-                      className="text-xs text-slate-500 hover:text-emerald-400 transition-colors px-2 py-1 rounded hover:bg-slate-700"
+                      className="text-slate-500 hover:text-emerald-400"
                     >
                       Challenge up
-                    </button>
+                    </Button>
                   )}
                   {isValidTarget && (
                     <button

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
+import { Badge } from '@/components/ui/badge';
 
 const navItems = [
   { path: '/', label: 'Ladder' },
@@ -46,9 +47,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             ))}
             <div className="ml-3 flex items-center gap-2">
               {isAdmin && (
-                <span className="text-xs font-medium text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
-                  Admin
-                </span>
+                <Badge color="amber">Admin</Badge>
               )}
               <button
                 onClick={logout}
@@ -62,9 +61,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {/* Mobile hamburger */}
           <div className="flex items-center gap-2 sm:hidden">
             {isAdmin && (
-              <span className="text-xs font-medium text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
-                Admin
-              </span>
+              <Badge color="amber">Admin</Badge>
             )}
             <button
               type="button"
