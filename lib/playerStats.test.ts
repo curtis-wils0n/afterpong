@@ -94,4 +94,18 @@ describe('computePlayerRecordStats', () => {
       }
     }
   });
+
+  it('counts play-ins: the unplaced player (null rank) is the challenger', () => {
+    // Newest-first: player 3 (rank 12) defends against unplaced player 4,
+    // then unplaced player 1 beats rank-13 player 2 (play-in win).
+    const matches: PlayerStatsMatch[] = [
+      { winnerId: 3, loserId: 4, isChallenge: true, winnerRankBefore: 12, loserRankBefore: null },
+      { winnerId: 1, loserId: 2, isChallenge: true, winnerRankBefore: null, loserRankBefore: 13 },
+    ];
+    const result = computePlayerRecordStats(matches);
+    expect(result.get(1)).toEqual({ wins: 1, losses: 0, defenses: 0, challengeStreak: 1 });
+    expect(result.get(2)).toEqual({ wins: 0, losses: 1, defenses: 0, challengeStreak: 0 });
+    expect(result.get(3)).toEqual({ wins: 1, losses: 0, defenses: 1, challengeStreak: 0 });
+    expect(result.get(4)).toEqual({ wins: 0, losses: 1, defenses: 0, challengeStreak: 0 });
+  });
 });

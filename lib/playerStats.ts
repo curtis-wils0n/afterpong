@@ -38,9 +38,12 @@ export function computePlayerRecordStats(
     getAcc(m.winnerId).wins++;
     getAcc(m.loserId).losses++;
 
-    if (!m.isChallenge || m.winnerRankBefore == null || m.loserRankBefore == null) continue;
-    const defenderRank = Math.min(m.winnerRankBefore, m.loserRankBefore);
-    const winnerWasDefender = m.winnerRankBefore === defenderRank;
+    if (!m.isChallenge || (m.winnerRankBefore == null && m.loserRankBefore == null)) continue;
+    // The defender is the lower-ranked (better) player; in a play-in the
+    // unplaced player (null rank) is always the challenger.
+    const winnerWasDefender =
+      m.winnerRankBefore != null &&
+      (m.loserRankBefore == null || m.winnerRankBefore < m.loserRankBefore);
 
     const winnerAcc = getAcc(m.winnerId);
     const loserAcc = getAcc(m.loserId);

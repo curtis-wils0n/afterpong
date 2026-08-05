@@ -311,14 +311,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       loser.upsetsSuffered += 1;
     }
 
-    // Challenge ladder stats
+    // Challenge ladder stats. The challenger is the lower-ranked (higher rank
+    // number) player; in a play-in the unplaced player (null rank).
     if (
       m.isChallenge &&
-      m.winnerRankBefore != null &&
-      m.loserRankBefore != null
+      (m.winnerRankBefore != null || m.loserRankBefore != null)
     ) {
-      // Challenger is the lower-ranked (higher rank number) player.
-      if (m.winnerRankBefore > m.loserRankBefore) {
+      if (
+        m.winnerRankBefore == null ||
+        (m.loserRankBefore != null && m.winnerRankBefore > m.loserRankBefore)
+      ) {
         // Winner climbed and won; loser defended and lost.
         winner.climbs += 1;
         winner.climbGames += 1;
@@ -590,47 +592,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .sort((a, b) => (a.winProb ?? 1) - (b.winProb ?? 1))
       .slice(0, DETAIL_CAP);
 
-  // Challenge wins as the lower-ranked challenger (the climbs).
-  const climbWinsFor = (pid: number): DetailMatch[] =>
-    matchesOf(pid)
-      .filter(
-        (m) =>
-          m.winnerId === pid &&
-          m.isChallenge &&
-          m.winnerRankBefore != null &&
-          m.loserRankBefore != null &&
-          m.winnerRankBefore > m.loserRankBefore,
-      )
-      .map((m) => detailFromMatch(m, pid))
-      .slice(-DETAIL_CAP);
-
-  // Challenge wins as the higher-ranked defender.
-  const defenseWinsFor = (pid: number): DetailMatch[] =>
-    matchesOf(pid)
-      .filter(
-        (m) =>
-          m.winnerId === pid &&
-          m.isChallenge &&
-          m.winnerRankBefore != null &&
-          m.loserRankBefore != null &&
-          m.winnerRankBefore <= m.loserRankBefore,
-      )
-      .map((m) => detailFromMatch(m, pid))
-      .slice(-DETAIL_CAP);
-
   // A player's role in a challenge: 'climb' (lower-ranked challenger) or
   // 'defense' (higher-ranked defender); null if it isn't a ranked challenge.
+  // In a play-in the unplaced player (null rank) is the challenger.
   const challengeRoleFor = (
     m: AnyMatch,
     pid: number,
   ): 'climb' | 'defense' | null => {
-    if (!m.isChallenge || m.winnerRankBefore == null || m.loserRankBefore == null)
+    if (!m.isChallenge || (m.winnerRankBefore == null && m.loserRankBefore == null))
       return null;
     const isWinner = m.winnerId === pid;
     const myRank = isWinner ? m.winnerRankBefore : m.loserRankBefore;
     const oppRank = isWinner ? m.loserRankBefore : m.winnerRankBefore;
+    if (myRank == null) return 'climb';
+    if (oppRank == null) return 'defense';
     return myRank > oppRank ? 'climb' : 'defense';
   };
+
+  // Challenge wins as the challenger (the climbs).
+  const climbWinsFor = (pid: number): DetailMatch[] =>
+    matchesOf(pid)
+      .filter((m) => m.winnerId === pid && challengeRoleFor(m, pid) === 'climb')
+      .map((m) => detailFromMatch(m, pid))
+      .slice(-DETAIL_CAP);
+
+  // Challenge wins as the defender.
+  const defenseWinsFor = (pid: number): DetailMatch[] =>
+    matchesOf(pid)
+      .filter((m) => m.winnerId === pid && challengeRoleFor(m, pid) === 'defense')
+      .map((m) => detailFromMatch(m, pid))
+      .slice(-DETAIL_CAP);
 
   // All challenge matches (wins and losses) a player played in a given role —
   // the detail behind the challenge win-rate stats.

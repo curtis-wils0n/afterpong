@@ -15,6 +15,7 @@
     "db:migrate": "npx tsx db/migrate.ts",
     "db:backfill-glicko": "npx tsx --env-file=.env db/backfill-glicko.ts",
     "db:normalize-scoreless": "npx tsx --env-file=.env db/normalize-scoreless-games.ts",
+    "db:unplace-never-challenged": "npx tsx --env-file=.env db/unplace-never-challenged.ts",
     "db:studio": "drizzle-kit studio",
     "db:reset": "npx neonctl@latest branches reset local-dev --project-id rough-credit-01845192 --parent"
   },

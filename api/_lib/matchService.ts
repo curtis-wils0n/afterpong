@@ -1,4 +1,4 @@
-import { eq, and, gt, lt } from 'drizzle-orm';
+import { eq, and, gt, gte, lt, desc, isNotNull, sql } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { players, matches } from '../../db/schema.js';
 import { inflateRd, rateMatch, daysBetween } from '../../lib/glicko.js';
@@ -65,36 +65,57 @@ export async function createMatch(
   }
 
   if (isChallenge) {
-    if (winner.challengeRank == null || loser.challengeRank == null) {
+    if (winner.challengeRank == null && loser.challengeRank == null) {
       return {
         ok: false,
         status: 400,
-        error: 'Both players must have a challenge rank',
+        error: 'At least one player must be placed on the ladder',
       };
     }
-    const higherRanked =
-      winner.challengeRank < loser.challengeRank ? winner : loser;
-    const lowerRanked =
-      winner.challengeRank < loser.challengeRank ? loser : winner;
-    // Count non-vacationing players strictly between the two ranks; vacationers
-    // are transparent so people below can challenge "past" them.
-    const between = await db
-      .select({ id: players.id })
-      .from(players)
-      .where(
-        and(
-          gt(players.challengeRank, higherRanked.challengeRank!),
-          lt(players.challengeRank, lowerRanked.challengeRank!),
-          eq(players.onVacation, false),
-        ),
-      );
-    if (between.length > 1) {
-      return {
-        ok: false,
-        status: 400,
-        error:
-          'Challenge matches can only be between players within 2 active ranks of each other',
-      };
+    if (winner.challengeRank == null || loser.challengeRank == null) {
+      // Play-in: an unplaced player enters the ladder by challenging one of
+      // the bottom 2 active placed players. Win = take the loser's spot,
+      // lose = placed at the bottom.
+      const placed = winner.challengeRank != null ? winner : loser;
+      const bottomTwo = await db
+        .select({ id: players.id })
+        .from(players)
+        .where(and(isNotNull(players.challengeRank), eq(players.onVacation, false)))
+        .orderBy(desc(players.challengeRank))
+        .limit(2);
+      if (!bottomTwo.some((p) => p.id === placed.id)) {
+        return {
+          ok: false,
+          status: 400,
+          error:
+            'Play-in challenges must be against one of the bottom 2 active players',
+        };
+      }
+    } else {
+      const higherRanked =
+        winner.challengeRank < loser.challengeRank ? winner : loser;
+      const lowerRanked =
+        winner.challengeRank < loser.challengeRank ? loser : winner;
+      // Count non-vacationing players strictly between the two ranks; vacationers
+      // are transparent so people below can challenge "past" them.
+      const between = await db
+        .select({ id: players.id })
+        .from(players)
+        .where(
+          and(
+            gt(players.challengeRank, higherRanked.challengeRank!),
+            lt(players.challengeRank, lowerRanked.challengeRank!),
+            eq(players.onVacation, false),
+          ),
+        );
+      if (between.length > 1) {
+        return {
+          ok: false,
+          status: 400,
+          error:
+            'Challenge matches can only be between players within 2 active ranks of each other',
+        };
+      }
     }
   }
 
@@ -148,6 +169,12 @@ export async function createMatch(
     winner.challengeRank != null &&
     loser.challengeRank != null &&
     winner.challengeRank > loser.challengeRank;
+  const playIn =
+    !!isChallenge &&
+    (winner.challengeRank == null) !== (loser.challengeRank == null);
+
+  let finalWinnerRank = winner.challengeRank;
+  let finalLoserRank = loser.challengeRank;
 
   const match = await db.transaction(async (tx) => {
     const [inserted] = await tx
@@ -176,6 +203,26 @@ export async function createMatch(
       })
       .returning();
 
+    if (swapRanks) {
+      finalWinnerRank = loser.challengeRank;
+      finalLoserRank = winner.challengeRank;
+    } else if (playIn && winner.challengeRank == null) {
+      // Unplaced challenger won: they enter at the loser's rank; the loser
+      // and everyone at or below it drop one spot.
+      await tx
+        .update(players)
+        .set({ challengeRank: sql`${players.challengeRank} + 1` })
+        .where(gte(players.challengeRank, loser.challengeRank!));
+      finalWinnerRank = loser.challengeRank;
+      finalLoserRank = loser.challengeRank! + 1;
+    } else if (playIn) {
+      // Unplaced challenger lost: they're placed at the bottom of the ladder.
+      const [{ maxRank }] = await tx
+        .select({ maxRank: sql<number>`COALESCE(MAX(${players.challengeRank}), 0)` })
+        .from(players);
+      finalLoserRank = Number(maxRank) + 1;
+    }
+
     await tx
       .update(players)
       .set({
@@ -183,7 +230,7 @@ export async function createMatch(
         rd: rated.winner.rd,
         volatility: rated.winner.volatility,
         lastMatchAt: now,
-        ...(swapRanks ? { challengeRank: loser.challengeRank } : {}),
+        ...(swapRanks || playIn ? { challengeRank: finalWinnerRank } : {}),
       })
       .where(eq(players.id, winnerId));
     await tx
@@ -193,15 +240,12 @@ export async function createMatch(
         rd: rated.loser.rd,
         volatility: rated.loser.volatility,
         lastMatchAt: now,
-        ...(swapRanks ? { challengeRank: winner.challengeRank } : {}),
+        ...(swapRanks || playIn ? { challengeRank: finalLoserRank } : {}),
       })
       .where(eq(players.id, loserId));
 
     return inserted;
   });
-
-  const updatedWinnerRank = swapRanks ? loser.challengeRank : winner.challengeRank;
-  const updatedLoserRank = swapRanks ? winner.challengeRank : loser.challengeRank;
 
   return {
     ok: true,
@@ -209,12 +253,12 @@ export async function createMatch(
     winner: {
       id: winner.id,
       rating: rated.winner.rating,
-      challengeRank: updatedWinnerRank,
+      challengeRank: finalWinnerRank,
     },
     loser: {
       id: loser.id,
       rating: rated.loser.rating,
-      challengeRank: updatedLoserRank,
+      challengeRank: finalLoserRank,
     },
   };
 }

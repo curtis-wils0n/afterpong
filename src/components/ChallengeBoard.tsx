@@ -53,7 +53,15 @@ export default function ChallengeBoard() {
 
   const getValidTargets = (player: Player): number[] => {
     if (player.onVacation) return [];
-    if (player.challengeRank == null || player.challengeRank <= 1) return [];
+    if (player.challengeRank == null) {
+      // Play-in: unplaced players can challenge the bottom 2 active placed players.
+      return players
+        .filter((p) => !p.onVacation && p.challengeRank != null)
+        .sort((a, b) => b.challengeRank! - a.challengeRank!)
+        .slice(0, 2)
+        .map((p) => p.id);
+    }
+    if (player.challengeRank <= 1) return [];
     const targets: number[] = [];
     for (const other of players) {
       if (other.id === player.id) continue;
@@ -78,10 +86,13 @@ export default function ChallengeBoard() {
   const selectedPlayer = players.find((p) => p.id === selectedChallenger);
   const validTargets = selectedPlayer ? getValidTargets(selectedPlayer) : [];
 
-  // A player can challenge if there's at least one active player ranked above them.
+  // A player can challenge if there's at least one active player ranked above
+  // them; unplaced players can play in against anyone placed.
   const canChallengeUp = (player: Player): boolean => {
     if (player.onVacation) return false;
-    if (player.challengeRank == null) return false;
+    if (player.challengeRank == null) {
+      return players.some((p) => !p.onVacation && p.challengeRank != null);
+    }
     return players.some(
       (p) =>
         !p.onVacation &&
@@ -124,8 +135,9 @@ export default function ChallengeBoard() {
 
       {selectedChallenger && (
         <div className="bg-slate-800 border border-emerald-500/30 rounded-lg px-4 py-3 mb-4 text-sm text-slate-300">
-          Select an opponent highlighted in green to log a challenge match.
-          Players can challenge up to 2 ranks above them.
+          {selectedPlayer?.challengeRank == null
+            ? 'Select an opponent highlighted in green to log a play-in match. Win to take their spot on the ladder; lose and you start at the bottom.'
+            : 'Select an opponent highlighted in green to log a challenge match. Players can challenge up to 2 ranks above them.'}
         </div>
       )}
 
@@ -180,13 +192,15 @@ export default function ChallengeBoard() {
                             : 'text-slate-400'
                     }`}
                   >
-                    {player.challengeRank === 1
-                      ? '\u{1F451}'
-                      : player.challengeRank === 2
-                        ? '\u{1F948}'
-                        : player.challengeRank === 3
-                          ? '\u{1F949}'
-                          : `#${player.challengeRank ?? '–'}`}
+                    {player.challengeRank == null
+                      ? '–'
+                      : player.challengeRank === 1
+                        ? '\u{1F451}'
+                        : player.challengeRank === 2
+                          ? '\u{1F948}'
+                          : player.challengeRank === 3
+                            ? '\u{1F949}'
+                            : `#${player.challengeRank}`}
                   </span>
                   <Link
                     to={`/players/${player.id}`}
@@ -224,7 +238,7 @@ export default function ChallengeBoard() {
                       onClick={() => setSelectedChallenger(player.id)}
                       className="text-slate-500 hover:text-emerald-400"
                     >
-                      Challenge up
+                      {player.challengeRank == null ? 'Play in' : 'Challenge up'}
                     </Button>
                   )}
                   {isValidTarget && (
