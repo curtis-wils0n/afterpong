@@ -3,6 +3,7 @@ import { db } from '../../db/index.js';
 import { players, matches } from '../../db/schema.js';
 import { desc, asc, sql } from 'drizzle-orm';
 import { requireAuth } from '../_lib/auth.js';
+import { computePlayerRecordStats } from '../../lib/playerStats.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const role = await requireAuth(req, res);
@@ -29,69 +30,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .from(matches)
       .orderBy(desc(matches.createdAt));
 
-    // The defender in a challenge is the lower-ranked (better) player; in a
-    // play-in the unplaced player (null rank) is always the challenger.
-    const winnerWasDefender = (m: (typeof allMatches)[number]): boolean =>
-      m.winnerRankBefore != null &&
-      (m.loserRankBefore == null || m.winnerRankBefore < m.loserRankBefore);
-
+    // allMatches is newest-first (orderBy desc createdAt), which the streak
+    // logic in computePlayerRecordStats relies on.
+    const statsById = computePlayerRecordStats(allMatches);
     const playersWithStats = allPlayers.map(player => {
-      let wins = 0;
-      let losses = 0;
-      for (const m of allMatches) {
-        if (m.winnerId === player.id) wins++;
-        if (m.loserId === player.id) losses++;
-      }
-
-      // Defense streak: iterate challenge matches newest-first
-      let defenses = 0;
-      for (const m of allMatches) {
-        if (!m.isChallenge) continue;
-        if (m.winnerId !== player.id && m.loserId !== player.id) continue;
-        if (m.winnerRankBefore == null && m.loserRankBefore == null) continue;
-
-        const playerIsWinner = m.winnerId === player.id;
-        const playerWasDefender = playerIsWinner
-          ? winnerWasDefender(m)
-          : !winnerWasDefender(m);
-
-        if (playerWasDefender && playerIsWinner) {
-          // Defender won — successful defense
-          defenses++;
-        } else if (!playerWasDefender && !playerIsWinner) {
-          // Challenger lost — rank unchanged, skip
-          continue;
-        } else {
-          // Defender lost OR Challenger won — rank changed, stop
-          break;
-        }
-      }
-
-      // Challenge win streak: consecutive wins as the challenger
-      let challengeStreak = 0;
-      for (const m of allMatches) {
-        if (!m.isChallenge) continue;
-        if (m.winnerId !== player.id && m.loserId !== player.id) continue;
-        if (m.winnerRankBefore == null && m.loserRankBefore == null) continue;
-
-        const playerIsWinner = m.winnerId === player.id;
-        const playerWasChallenger = playerIsWinner
-          ? !winnerWasDefender(m)
-          : winnerWasDefender(m);
-
-        if (playerWasChallenger && playerIsWinner) {
-          // Challenger won — streak continues
-          challengeStreak++;
-        } else if (playerWasChallenger && !playerIsWinner) {
-          // Challenger lost — failed challenge, stop
-          break;
-        } else {
-          // Defender (won or lost) — doesn't affect climb streak, skip
-          continue;
-        }
-      }
-
-      return { ...player, wins, losses, defenses, challengeStreak };
+      const s = statsById.get(player.id);
+      return {
+        ...player,
+        wins: s?.wins ?? 0,
+        losses: s?.losses ?? 0,
+        defenses: s?.defenses ?? 0,
+        challengeStreak: s?.challengeStreak ?? 0,
+      };
     });
 
     return res.json(playersWithStats);
