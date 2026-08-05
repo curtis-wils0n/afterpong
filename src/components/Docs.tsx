@@ -111,7 +111,9 @@ export default function Docs() {
               new. A fresh player starts at a skill rating of <Mono>1500</Mono>{' '}
               with maximum uncertainty (<Mono>±700</Mono>, so a leaderboard
               score of <Mono>800</Mono>) and climbs quickly as they play. New
-              players also get appended to the bottom of the challenge ladder.
+              players start <em>unplaced</em> on the challenge ladder and enter
+              it via a play-in challenge (see{' '}
+              <a className="underline" href="#ladder">Challenge ladder</a>).
             </li>
             <li>
               <strong>Play a match</strong>, then click <em>Log a match</em>{' '}
@@ -232,8 +234,16 @@ export default function Docs() {
         <Section id="ladder" title="Challenge ladder">
           <p>
             The ladder is a strict ordering of players. Lower rank number =
-            higher position. New players are appended to the bottom.
+            higher position. New players start <em>unplaced</em> (shown as{' '}
+            <Mono>–</Mono>) and join the ladder through a play-in.
           </p>
+          <Rule label="Play-in">
+            An unplaced player's first challenge must be against one of the{' '}
+            <strong>bottom 2 active placed players</strong>. Win, and they take
+            the loser's spot — the loser and everyone below drop one. Lose, and
+            they're placed at the bottom of the ladder. Either way, one play-in
+            match gets them placed.
+          </Rule>
           <Rule label="Who can challenge whom">
             Two players can play a challenge match only if there is{' '}
             <strong>at most one other active player</strong> between them on
@@ -301,8 +311,8 @@ export default function Docs() {
               point-based stats (like Bagels) skip these games.
             </li>
             <li>
-              <strong>Challenge flag</strong>. Only set this if both players
-              are on the ladder within range. The API rejects invalid
+              <strong>Challenge flag</strong>. Only set this if the pairing is
+              a valid challenge (or play-in). The API rejects invalid
               challenges.
             </li>
           </ul>
@@ -325,7 +335,7 @@ export default function Docs() {
               rating, RD, volatility, and last-played time) from the stored
               snapshots.
             </li>
-            <li>Reverts the ladder swap, if one happened.</li>
+            <li>Reverts any ladder movement (a swap or a play-in placement).</li>
             <li>
               For tournament matches, clears the played-match link and pulls
               the advanced player back out of the next-round slot.

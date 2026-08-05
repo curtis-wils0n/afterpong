@@ -12,11 +12,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sort = req.query.sort;
     const includeStats = req.query.include === 'stats';
     // Default sort is the conservative rating (rating − 2×RD) — the same
-    // number the leaderboard displays.
+    // number the leaderboard displays. Rank sort puts unplaced players
+    // (NULL rank) last, oldest first.
     const orderBy = sort === 'rank'
-      ? asc(players.challengeRank)
-      : desc(sql`${players.rating} - 2 * ${players.rd}`);
-    const allPlayers = await db.select().from(players).orderBy(orderBy);
+      ? [asc(players.challengeRank), asc(players.createdAt)]
+      : [desc(sql`${players.rating} - 2 * ${players.rd}`)];
+    const allPlayers = await db.select().from(players).orderBy(...orderBy);
 
     if (!includeStats) {
       return res.json(allPlayers);
@@ -27,6 +28,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .select()
       .from(matches)
       .orderBy(desc(matches.createdAt));
+
+    // The defender in a challenge is the lower-ranked (better) player; in a
+    // play-in the unplaced player (null rank) is always the challenger.
+    const winnerWasDefender = (m: (typeof allMatches)[number]): boolean =>
+      m.winnerRankBefore != null &&
+      (m.loserRankBefore == null || m.winnerRankBefore < m.loserRankBefore);
 
     const playersWithStats = allPlayers.map(player => {
       let wins = 0;
@@ -41,14 +48,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (const m of allMatches) {
         if (!m.isChallenge) continue;
         if (m.winnerId !== player.id && m.loserId !== player.id) continue;
-        if (m.winnerRankBefore == null || m.loserRankBefore == null) continue;
+        if (m.winnerRankBefore == null && m.loserRankBefore == null) continue;
 
         const playerIsWinner = m.winnerId === player.id;
-        // The defender is the one with the lower rank number (higher position)
-        const defenderRank = Math.min(m.winnerRankBefore, m.loserRankBefore);
         const playerWasDefender = playerIsWinner
-          ? m.winnerRankBefore === defenderRank
-          : m.loserRankBefore === defenderRank;
+          ? winnerWasDefender(m)
+          : !winnerWasDefender(m);
 
         if (playerWasDefender && playerIsWinner) {
           // Defender won — successful defense
@@ -67,13 +72,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (const m of allMatches) {
         if (!m.isChallenge) continue;
         if (m.winnerId !== player.id && m.loserId !== player.id) continue;
-        if (m.winnerRankBefore == null || m.loserRankBefore == null) continue;
+        if (m.winnerRankBefore == null && m.loserRankBefore == null) continue;
 
         const playerIsWinner = m.winnerId === player.id;
-        const defenderRank = Math.min(m.winnerRankBefore, m.loserRankBefore);
         const playerWasChallenger = playerIsWinner
-          ? m.winnerRankBefore !== defenderRank
-          : m.loserRankBefore !== defenderRank;
+          ? !winnerWasDefender(m)
+          : winnerWasDefender(m);
 
         if (playerWasChallenger && playerIsWinner) {
           // Challenger won — streak continues
@@ -100,14 +104,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-      const [maxRankRow] = await db
-        .select({ maxRank: sql<number>`COALESCE(MAX(${players.challengeRank}), 0)` })
-        .from(players);
-      const newRank = Number(maxRankRow.maxRank) + 1;
-
+      // New players start unplaced (no challenge rank) and enter the ladder
+      // via a play-in challenge.
       const [player] = await db.insert(players).values({
         name: name.trim(),
-        challengeRank: newRank,
       }).returning();
       return res.status(201).json(player);
     } catch {

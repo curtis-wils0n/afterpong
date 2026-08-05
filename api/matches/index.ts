@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { db } from '../../db/index.js';
 import { players, matches, tournamentMatches, tournaments } from '../../db/schema.js';
-import { eq, desc, inArray, and, or, sql, type SQL } from 'drizzle-orm';
+import { eq, gt, desc, inArray, and, or, sql, type SQL } from 'drizzle-orm';
 import { requireAuth, requireAdmin } from '../_lib/auth.js';
 import { createMatch } from '../_lib/matchService.js';
 
@@ -190,6 +190,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ...(revertRanks ? { challengeRank: latest.loserRankBefore } : {}),
         })
         .where(eq(players.id, loser.id));
+
+      // Play-in revert: put the unplaced player back off-ladder and undo any
+      // placement shift.
+      if (latest.isChallenge && latest.winnerRankBefore == null && latest.loserRankBefore != null) {
+        // Unplaced challenger had won and entered at the loser's rank.
+        await tx
+          .update(players)
+          .set({ challengeRank: null })
+          .where(eq(players.id, winner.id));
+        await tx
+          .update(players)
+          .set({ challengeRank: sql`${players.challengeRank} - 1` })
+          .where(gt(players.challengeRank, latest.loserRankBefore));
+      } else if (latest.isChallenge && latest.loserRankBefore == null && latest.winnerRankBefore != null) {
+        // Unplaced challenger had lost and been placed at the bottom.
+        await tx
+          .update(players)
+          .set({ challengeRank: null })
+          .where(eq(players.id, loser.id));
+      }
 
       // Revert tournament bracket advancement
       if (tournamentMatch) {
