@@ -13,6 +13,14 @@ export const players = pgTable('players', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// Failed-login counter per client IP, backing the login rate limit. One row
+// per IP; the row resets when a login succeeds or the window expires.
+export const loginAttempts = pgTable('login_attempts', {
+  ip: varchar('ip', { length: 64 }).primaryKey(),
+  count: integer('count').notNull().default(0),
+  windowStart: timestamp('window_start').notNull().defaultNow(),
+});
+
 export const matches = pgTable('matches', {
   id: serial('id').primaryKey(),
   winnerId: integer('winner_id').references(() => players.id).notNull(),
