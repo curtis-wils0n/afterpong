@@ -10,6 +10,9 @@ export const players = pgTable('players', {
   lastMatchAt: timestamp('last_match_at'),
   challengeRank: integer('challenge_rank'),
   onVacation: boolean('on_vacation').notNull().default(false),
+  // Left the company: hidden from the leaderboard, ladder, and new matches;
+  // match history and profile stats are kept.
+  retired: boolean('retired').notNull().default(false),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

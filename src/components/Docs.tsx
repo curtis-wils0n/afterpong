@@ -291,6 +291,14 @@ export default function Docs() {
             little lower, and their first matches back move their rating
             faster while the system re-confirms where they stand.
           </p>
+          <p className="mt-2">
+            Players who leave the company can be <strong>retired</strong> by an
+            admin from their profile. A retired player is removed from the
+            leaderboard and ladder (everyone below them moves up one spot) and
+            can't be entered in new matches, but their profile, stats, and
+            match history are kept. Un-retiring brings them back unplaced, to
+            re-enter via play-in.
+          </p>
         </Section>
 
         <Section id="matches" title="Logging matches">

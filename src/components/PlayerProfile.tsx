@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, Tooltip } from 'recharts';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { isUpset, expectedScore, conservativeRating } from '../../lib/glicko';
 import { hasPointScores } from '../../lib/games';
 import { niceAxis } from '../lib/chart';
@@ -28,7 +29,8 @@ export default function PlayerProfile() {
   const [player, setPlayer] = useState<PlayerProfileType | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedH2H, setExpandedH2H] = useState<number | null>(null);
-  const [updatingVacation, setUpdatingVacation] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const { isAdmin } = useAuth();
   const [windowKey, setWindowKey] = useState<WindowKey>('all');
   const MATCH_PAGE_SIZE = 20;
   const [visibleMatchCount, setVisibleMatchCount] = useState(MATCH_PAGE_SIZE);
@@ -57,15 +59,35 @@ export default function PlayerProfile() {
   }, [player]);
 
   const handleToggleVacation = async () => {
-    if (!player || updatingVacation) return;
-    setUpdatingVacation(true);
+    if (!player || updatingStatus) return;
+    setUpdatingStatus(true);
     try {
       const updated = await api.players.setVacation(player.id, !player.onVacation);
       setPlayer({ ...player, onVacation: updated.onVacation });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to update vacation status');
     } finally {
-      setUpdatingVacation(false);
+      setUpdatingStatus(false);
+    }
+  };
+
+  const handleToggleRetired = async () => {
+    if (!player || updatingStatus) return;
+    if (
+      !player.retired &&
+      !confirm(
+        `Retire ${player.name}? They'll be removed from the leaderboard and ladder (players below move up). Their stats and match history are kept.`,
+      )
+    )
+      return;
+    setUpdatingStatus(true);
+    try {
+      const updated = await api.players.setRetired(player.id, !player.retired);
+      setPlayer({ ...player, retired: updated.retired, challengeRank: updated.challengeRank });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update retired status');
+    } finally {
+      setUpdatingStatus(false);
     }
   };
 
@@ -251,7 +273,12 @@ export default function PlayerProfile() {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl font-bold">{player.name}</h1>
-              {player.onVacation && (
+              {player.retired && (
+                <Badge title="No longer at the company. Hidden from the leaderboard and ladder.">
+                  RETIRED
+                </Badge>
+              )}
+              {player.onVacation && !player.retired && (
                 <Badge
                   color="sky"
                   title="Hidden from new matches. Ladder position is held until they return."
@@ -259,23 +286,40 @@ export default function PlayerProfile() {
                   ON VACATION
                 </Badge>
               )}
-              <button
-                type="button"
-                onClick={handleToggleVacation}
-                disabled={updatingVacation}
-                title="Hidden from new matches while on vacation. Ladder position is held."
-                className={`text-xs font-medium px-2 py-0.5 rounded-full border transition-colors disabled:opacity-50 ${
-                  player.onVacation
-                    ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/20'
-                    : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:border-slate-500'
-                }`}
-              >
-                {updatingVacation
-                  ? 'Updating...'
-                  : player.onVacation
-                    ? 'Back from vacation'
-                    : 'Set on vacation'}
-              </button>
+              {!player.retired && (
+                <button
+                  type="button"
+                  onClick={handleToggleVacation}
+                  disabled={updatingStatus}
+                  title="Hidden from new matches while on vacation. Ladder position is held."
+                  className={`text-xs font-medium px-2 py-0.5 rounded-full border transition-colors disabled:opacity-50 ${
+                    player.onVacation
+                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/20'
+                      : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:border-slate-500'
+                  }`}
+                >
+                  {updatingStatus
+                    ? 'Updating...'
+                    : player.onVacation
+                      ? 'Back from vacation'
+                      : 'Set on vacation'}
+                </button>
+              )}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleToggleRetired}
+                  disabled={updatingStatus}
+                  title={
+                    player.retired
+                      ? 'Bring back as an active player. They re-enter the ladder via play-in.'
+                      : 'Left the company: remove from the leaderboard and ladder, keep their stats.'
+                  }
+                  className="text-xs font-medium px-2 py-0.5 rounded-full border transition-colors disabled:opacity-50 bg-slate-700/50 border-slate-600 text-slate-400 hover:border-slate-500"
+                >
+                  {player.retired ? 'Un-retire' : 'Retire'}
+                </button>
+              )}
             </div>
             {player.challengeRank != null && (
               <span className="text-sm text-slate-400">

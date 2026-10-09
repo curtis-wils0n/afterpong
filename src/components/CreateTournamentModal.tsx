@@ -30,7 +30,7 @@ export default function CreateTournamentModal({ onClose, onCreated }: Props) {
   useEffect(() => {
     api.players
       .list('rating')
-      .then(setPlayers)
+      .then((data) => setPlayers(data.filter((p) => !p.retired)))
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load players'));
   }, []);
 

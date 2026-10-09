@@ -55,12 +55,19 @@ export async function createMatch(
     return { ok: false, status: 404, error: 'Player not found' };
   }
 
-  // Tournament matches are allowed to ignore vacation status (bracket is already set).
+  // Tournament matches are allowed to ignore vacation/retired status (bracket is already set).
   if (tournamentMatchId == null && (winner.onVacation || loser.onVacation)) {
     return {
       ok: false,
       status: 400,
       error: 'Cannot log a match involving a player on vacation',
+    };
+  }
+  if (tournamentMatchId == null && (winner.retired || loser.retired)) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'Cannot log a match involving a retired player',
     };
   }
 

@@ -7,6 +7,7 @@ export interface Player {
   lastMatchAt: string | null;
   challengeRank: number | null;
   onVacation: boolean;
+  retired: boolean;
   createdAt: string;
   wins?: number;
   losses?: number;

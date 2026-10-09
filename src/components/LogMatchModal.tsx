@@ -252,10 +252,10 @@ export default function LogMatchModal({
       )
     : players;
 
-  // Hide vacationing players from selection unless they're preselected (which
-  // shouldn't happen) or this is a tournament match (bracket is fixed).
+  // Hide vacationing/retired players from selection unless they're preselected
+  // (which shouldn't happen) or this is a tournament match (bracket is fixed).
   const selectablePlayers = (isChallenge ? challengePlayers : players).filter(
-    (p) => isTournament || preselectedPlayers || !p.onVacation,
+    (p) => isTournament || preselectedPlayers || (!p.onVacation && !p.retired),
   );
   const availablePlayers = selectablePlayers;
 
