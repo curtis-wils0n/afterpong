@@ -1,12 +1,43 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { db } from '../../db/index.js';
 import { players, matches } from '../../db/schema.js';
-import { eq, or, desc, inArray } from 'drizzle-orm';
-import { requireAuth } from '../_lib/auth.js';
+import { eq, or, desc, inArray, gt, sql } from 'drizzle-orm';
+import { requireAuth, requireAdmin } from '../_lib/auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const id = Number(req.query.id);
   if (isNaN(id)) return res.status(400).json({ error: 'Invalid player ID' });
+
+  if (req.method === 'PATCH' && req.body?.retired !== undefined) {
+    // Retiring gives up the ladder spot, so it's admin-only.
+    const isAdmin = await requireAdmin(req, res);
+    if (!isAdmin) return;
+
+    const { retired } = req.body;
+    if (typeof retired !== 'boolean') {
+      return res.status(400).json({ error: 'retired must be a boolean' });
+    }
+    const updated = await db.transaction(async (tx) => {
+      const [player] = await tx.select().from(players).where(eq(players.id, id));
+      if (!player) return undefined;
+      // Retiring drops them off the ladder and closes the gap. Un-retiring
+      // leaves them unplaced; they re-enter via play-in.
+      if (retired && player.challengeRank != null) {
+        await tx
+          .update(players)
+          .set({ challengeRank: sql`${players.challengeRank} - 1` })
+          .where(gt(players.challengeRank, player.challengeRank));
+      }
+      const [row] = await tx
+        .update(players)
+        .set({ retired, ...(retired ? { challengeRank: null } : {}) })
+        .where(eq(players.id, id))
+        .returning();
+      return row;
+    });
+    if (!updated) return res.status(404).json({ error: 'Player not found' });
+    return res.json(updated);
+  }
 
   if (req.method === 'PATCH') {
     // Any authenticated user can toggle a player's vacation status.

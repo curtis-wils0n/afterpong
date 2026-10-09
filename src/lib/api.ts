@@ -56,6 +56,11 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ onVacation }),
       }),
+    setRetired: (id: number, retired: boolean) =>
+      fetchJSON<Player>(`/players/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ retired }),
+      }),
   },
   matches: {
     list: (opts?: { limit?: number; offset?: number; playerIds?: number[] }) => {

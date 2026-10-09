@@ -24,7 +24,7 @@ export default function ChallengeBoard() {
   const fetchPlayers = async () => {
     try {
       const data = await api.players.list('rank', true);
-      setPlayers(data);
+      setPlayers(data.filter((p) => !p.retired));
     } catch (err) {
       console.error('Failed to fetch players:', err);
     } finally {

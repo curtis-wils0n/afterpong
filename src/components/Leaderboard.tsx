@@ -27,7 +27,7 @@ export default function Leaderboard() {
   const fetchPlayers = async () => {
     try {
       const data = await api.players.list('rating', true);
-      setPlayers(data);
+      setPlayers(data.filter((p) => !p.retired));
     } catch (err) {
       console.error('Failed to fetch players:', err);
     } finally {
