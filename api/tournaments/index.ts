@@ -91,6 +91,9 @@ async function handleCreate(req: VercelRequest, res: VercelResponse) {
   if (participantPlayers.length !== playerIds.length) {
     return res.status(400).json({ error: 'Some players were not found' });
   }
+  if (participantPlayers.some((p) => p.retired)) {
+    return res.status(400).json({ error: 'Retired players cannot join a tournament' });
+  }
 
   // Seed participants
   const seeded = seedParticipants(

@@ -18,7 +18,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'retired must be a boolean' });
     }
     const updated = await db.transaction(async (tx) => {
-      const [player] = await tx.select().from(players).where(eq(players.id, id));
+      const [player] = await tx.select().from(players).where(eq(players.id, id)).for('update');
       if (!player) return undefined;
       // Retiring drops them off the ladder and closes the gap. Un-retiring
       // leaves them unplaced; they re-enter via play-in.
