@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { conservativeRating } from '../../lib/glicko';
+import { activePlayersBetween, challengeLossMultiplier } from '../../lib/ladder';
 import type { Player } from '../types';
 import LogMatchModal from './LogMatchModal';
 import { Button } from '@/components/ui/button';
@@ -61,27 +62,25 @@ export default function ChallengeBoard() {
         .slice(0, 2)
         .map((p) => p.id);
     }
-    if (player.challengeRank <= 1) return [];
-    const targets: number[] = [];
-    for (const other of players) {
-      if (other.id === player.id) continue;
-      if (other.onVacation) continue;
-      if (other.challengeRank == null) continue;
-      if (other.challengeRank >= player.challengeRank) continue;
-      // Count active players strictly between the two ranks.
-      const between = players.filter(
+    // Anyone active above is fair game; 3+ active ranks up is a long-range
+    // challenge with a loss multiplier.
+    return players
+      .filter(
         (p) =>
           !p.onVacation &&
           p.challengeRank != null &&
-          p.challengeRank > other.challengeRank! &&
           p.challengeRank < player.challengeRank!,
-      ).length;
-      if (between <= 1) {
-        targets.push(other.id);
-      }
-    }
-    return targets;
+      )
+      .map((p) => p.id);
   };
+
+  // Loser's rating-drop multiplier if `selected` challenges `target` (1 = normal).
+  const lossMultiplierFor = (selected: Player | undefined, target: Player): number =>
+    selected?.challengeRank != null && target.challengeRank != null
+      ? challengeLossMultiplier(
+          activePlayersBetween(players, selected.challengeRank, target.challengeRank),
+        )
+      : 1;
 
   const selectedPlayer = players.find((p) => p.id === selectedChallenger);
   const validTargets = selectedPlayer ? getValidTargets(selectedPlayer) : [];
@@ -137,7 +136,7 @@ export default function ChallengeBoard() {
         <div className="bg-slate-800 border border-emerald-500/30 rounded-lg px-4 py-3 mb-4 text-sm text-slate-300">
           {selectedPlayer?.challengeRank == null
             ? 'Select an opponent highlighted in green to log a play-in match. Win to take their spot on the ladder; lose and you start at the bottom.'
-            : 'Select an opponent highlighted in green to log a challenge match. Players can challenge up to 2 ranks above them.'}
+            : 'Select an opponent to log a challenge match. Green targets are up to 2 ranks above you. Amber targets are long-range: whoever loses has their rating drop multiplied by the rank distance (×N).'}
         </div>
       )}
 
@@ -152,6 +151,8 @@ export default function ChallengeBoard() {
           {players.map((player) => {
             const isSelected = selectedChallenger === player.id;
             const isValidTarget = validTargets.includes(player.id);
+            const lossMultiplier = isValidTarget ? lossMultiplierFor(selectedPlayer, player) : 1;
+            const isLongRange = lossMultiplier > 1;
             const canChallenge = canChallengeUp(player);
             const isVacation = player.onVacation;
 
@@ -163,9 +164,11 @@ export default function ChallengeBoard() {
                       ? 'bg-slate-800/40 border-slate-700/50 opacity-50'
                       : isSelected
                         ? 'bg-emerald-500/10 border-emerald-500/50'
-                        : isValidTarget
-                          ? 'bg-emerald-500/5 border-emerald-500/30 cursor-pointer hover:bg-emerald-500/15'
-                          : 'bg-slate-800 border-slate-700'
+                        : isLongRange
+                          ? 'bg-amber-500/5 border-amber-500/30 cursor-pointer hover:bg-amber-500/15'
+                          : isValidTarget
+                            ? 'bg-emerald-500/5 border-emerald-500/30 cursor-pointer hover:bg-emerald-500/15'
+                            : 'bg-slate-800 border-slate-700'
                   }`}
                   onClick={() => {
                     if (isVacation) return;
@@ -249,9 +252,18 @@ export default function ChallengeBoard() {
                           targetId: player.id,
                         })
                       }
-                      className="text-xs font-medium text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded hover:bg-emerald-500/20 transition-colors"
+                      title={
+                        isLongRange
+                          ? `Long-range challenge: whoever loses drops ${lossMultiplier}× their normal rating change`
+                          : undefined
+                      }
+                      className={`text-xs font-medium px-2 py-1 rounded transition-colors ${
+                        isLongRange
+                          ? 'text-amber-400 bg-amber-500/10 hover:bg-amber-500/20'
+                          : 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20'
+                      }`}
                     >
-                      Log match
+                      {isLongRange ? `Log match ×${lossMultiplier}` : 'Log match'}
                     </button>
                   )}
                 </div>

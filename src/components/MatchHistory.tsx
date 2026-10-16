@@ -281,7 +281,7 @@ export default function MatchHistory() {
                     <Badge color="amber">TOURNAMENT</Badge>
                   )}
                   {match.isChallenge && (
-                    <Badge color="purple">CHALLENGE</Badge>
+                    <Badge color="purple">CHALLENGE{match.lossMultiplier > 1 && ` ×${match.lossMultiplier}`}</Badge>
                   )}
                   {isUpset(match) && (
                     <Badge color="yellow">UPSET</Badge>

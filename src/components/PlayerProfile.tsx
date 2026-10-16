@@ -667,7 +667,7 @@ export default function PlayerProfile() {
                                   <Badge color="amber" className="px-1.5">TOURNAMENT</Badge>
                                 )}
                                 {match.isChallenge && (
-                                  <Badge color="purple" className="px-1.5">CHALLENGE</Badge>
+                                  <Badge color="purple" className="px-1.5">CHALLENGE{match.lossMultiplier > 1 && ` ×${match.lossMultiplier}`}</Badge>
                                 )}
                                 {isUpset(match) && (
                                   <Badge color="yellow" className="px-1.5">UPSET</Badge>
@@ -759,7 +759,7 @@ export default function PlayerProfile() {
               const badges = (
                 <>
                   {isTournament && <Badge color="amber">TOURNAMENT</Badge>}
-                  {match.isChallenge && <Badge color="purple">CHALLENGE</Badge>}
+                  {match.isChallenge && <Badge color="purple">CHALLENGE{match.lossMultiplier > 1 && ` ×${match.lossMultiplier}`}</Badge>}
                   {isUpset(match) && <Badge color="yellow">UPSET</Badge>}
                 </>
               );

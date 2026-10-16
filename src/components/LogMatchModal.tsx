@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import { expectedScore, blendedWinProbability } from '../../lib/glicko';
+import { activePlayersBetween, challengeLossMultiplier } from '../../lib/ladder';
 import {
   inProgressGameProbability,
   seriesWinProbability,
@@ -261,6 +262,12 @@ export default function LogMatchModal({
 
   const player1 = players.find((p) => p.id === player1Id);
   const player2 = players.find((p) => p.id === player2Id);
+  const lossMultiplier =
+    isChallenge && player1?.challengeRank != null && player2?.challengeRank != null
+      ? challengeLossMultiplier(
+          activePlayersBetween(players, player1.challengeRank, player2.challengeRank),
+        )
+      : 1;
 
   // A game's winner (1, 2, or null if undecided). In points mode a game is
   // won by reaching the target; in scoreless mode it's whoever was tapped.
@@ -720,6 +727,13 @@ export default function LogMatchModal({
             <div className="text-xs text-purple-400 bg-purple-400/10 border border-purple-500/30 rounded-lg px-3 py-2">
               Challenge match — if the lower-ranked player wins, they take the
               higher rank.
+            </div>
+          )}
+
+          {lossMultiplier > 1 && (
+            <div className="text-xs text-amber-400 bg-amber-400/10 border border-amber-500/30 rounded-lg px-3 py-2">
+              Long-range challenge ({lossMultiplier} ranks apart) — whoever loses
+              drops {lossMultiplier}× their normal rating change.
             </div>
           )}
 

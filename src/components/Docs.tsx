@@ -245,17 +245,26 @@ export default function Docs() {
             match gets them placed.
           </Rule>
           <Rule label="Who can challenge whom">
-            Two players can play a challenge match only if there is{' '}
-            <strong>at most one other active player</strong> between them on
-            the ladder. In practice this means you can challenge your immediate
-            neighbor, or jump one slot. Vacationing players are skipped over
-            entirely — see <a className="underline" href="#vacation">vacation mode</a>.
+            A normal challenge is against someone with{' '}
+            <strong>at most one other active player</strong> between you on
+            the ladder: your immediate neighbor, or one slot further. Vacationing
+            players are skipped over entirely — see{' '}
+            <a className="underline" href="#vacation">vacation mode</a>.
+          </Rule>
+          <Rule label="Long-range challenges">
+            You can also challenge anyone further up, but it's high stakes:
+            whoever loses has their rating drop <strong>multiplied by the rank
+            distance</strong>. Challenge someone 4 active ranks up and the loser
+            drops 4× what they normally would. The winner's gain and the ladder
+            swap work as usual. These show in amber on the Ladder page and as{' '}
+            <Mono>CHALLENGE ×N</Mono> in match history.
           </Rule>
           <Rule label="What happens after">
             If the lower-ranked player wins, the two players <strong>swap</strong>{' '}
             ladder positions. There is no cascade — nobody else moves. If the
             higher-ranked player wins, the ladder is unchanged. Either way, both
-            players' ratings update as normal.
+            players' ratings update as normal (apart from the long-range
+            multiplier on the loser).
           </Rule>
           <Rule label="Non-challenge matches">
             Casual matches affect ratings but never the ladder. To play a match

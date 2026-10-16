@@ -40,6 +40,9 @@ export const matches = pgTable('matches', {
   loserVolBefore: doublePrecision('loser_vol_before'),
   loserLastMatchBefore: timestamp('loser_last_match_before'),
   isChallenge: boolean('is_challenge').notNull().default(false),
+  // Long-range challenges (3+ active ranks apart) multiply the loser's rating
+  // drop by the rank distance. Stored so rating replays reproduce it.
+  lossMultiplier: integer('loss_multiplier').notNull().default(1),
   games: jsonb('games').$type<GameScore[]>(),
   winnerRankBefore: integer('winner_rank_before'),
   loserRankBefore: integer('loser_rank_before'),
