@@ -3,6 +3,7 @@ import { db } from '../../db/index.js';
 import { players, matches } from '../../db/schema.js';
 import { inflateRd, rateMatch, daysBetween } from '../../lib/glicko.js';
 import { gameWonByMatchWinner, isScoredGame, type GameScore } from '../../lib/games.js';
+import { challengeLossMultiplier } from '../../lib/ladder.js';
 
 export interface CreateMatchInput {
   winnerId: number;
@@ -71,6 +72,7 @@ export async function createMatch(
     };
   }
 
+  let lossMultiplier = 1;
   if (isChallenge) {
     if (winner.challengeRank == null && loser.challengeRank == null) {
       return {
@@ -115,14 +117,7 @@ export async function createMatch(
             eq(players.onVacation, false),
           ),
         );
-      if (between.length > 1) {
-        return {
-          ok: false,
-          status: 400,
-          error:
-            'Challenge matches can only be between players within 2 active ranks of each other',
-        };
-      }
+      lossMultiplier = challengeLossMultiplier(between.length);
     }
   }
 
@@ -166,7 +161,7 @@ export async function createMatch(
     { rating: loser.rating, rd: loser.rd, volatility: loser.volatility },
     daysBetween(loser.lastMatchAt, now),
   );
-  const rated = rateMatch(winnerPre, loserPre);
+  const rated = rateMatch(winnerPre, loserPre, lossMultiplier);
 
   // All writes (match insert, both rating updates, rank swap) commit or roll
   // back together. Queries inside a transaction share one connection, so they
@@ -202,6 +197,7 @@ export async function createMatch(
         loserVolBefore: loser.volatility,
         loserLastMatchBefore: loser.lastMatchAt,
         isChallenge: !!isChallenge,
+        lossMultiplier,
         games: validatedGames,
         winnerRankBefore: winner.challengeRank,
         loserRankBefore: loser.challengeRank,

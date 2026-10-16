@@ -46,7 +46,7 @@ export async function recomputeRatings(
 
     const winnerPre = inflateRd(winner, daysBetween(winnerLast, m.createdAt));
     const loserPre = inflateRd(loser, daysBetween(loserLast, m.createdAt));
-    const rated = rateMatch(winnerPre, loserPre);
+    const rated = rateMatch(winnerPre, loserPre, m.lossMultiplier);
 
     if (opts.rewriteSince == null || m.createdAt >= opts.rewriteSince) {
       await db

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { challengeLossMultiplier } from './ladder.js';
 import {
   DEFAULT_RATING,
   DEFAULT_RD,
@@ -136,6 +137,18 @@ describe('rateMatch', () => {
     const rookie = { rating: 1500, rd: 350, volatility: 0.06 };
     const { winner, loser } = rateMatch(veteran, rookie);
     expect(winner.rating - 1500).toBeLessThan(1500 - loser.rating);
+  });
+
+  it('multiplies only the loser’s rating drop for long-range challenges', () => {
+    const a = { rating: 1400, rd: 80, volatility: 0.06 };
+    const b = { rating: 1700, rd: 80, volatility: 0.06 };
+    const normal = rateMatch(a, b);
+    const longRange = rateMatch(a, b, challengeLossMultiplier(3)); // 4 ranks apart
+    expect(1700 - longRange.loser.rating).toBeCloseTo(4 * (1700 - normal.loser.rating), 9);
+    expect(longRange.loser.rd).toBe(normal.loser.rd);
+    expect(longRange.winner).toEqual(normal.winner);
+    // Normal range (0-1 active players between) is unscaled.
+    expect([0, 1, 2, 5].map(challengeLossMultiplier)).toEqual([1, 1, 3, 6]);
   });
 
   it('shrinks both players’ RD', () => {

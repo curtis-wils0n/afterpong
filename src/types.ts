@@ -37,6 +37,7 @@ export interface Match {
   loserRdBefore: number | null;
   loserVolBefore: number | null;
   isChallenge: boolean;
+  lossMultiplier: number;
   games: GameScore[] | null;
   tournamentMatchId: number | null;
   createdAt: string;

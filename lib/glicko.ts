@@ -149,13 +149,20 @@ function updateOne(player: GlickoState, opponent: GlickoState, score: 0 | 1): Gl
 
 // Rate a single match. Both players are updated against the other's
 // pre-match state. Call inflateRd() for each player's idle time first.
+// lossMultiplier scales the loser's rating drop (long-range ladder
+// challenges); RD and volatility update normally.
 export function rateMatch(
   winner: GlickoState,
   loser: GlickoState,
+  lossMultiplier = 1,
 ): { winner: GlickoState; loser: GlickoState } {
+  const loserNew = updateOne(loser, winner, 0);
   return {
     winner: updateOne(winner, loser, 1),
-    loser: updateOne(loser, winner, 0),
+    loser: {
+      ...loserNew,
+      rating: loser.rating + lossMultiplier * (loserNew.rating - loser.rating),
+    },
   };
 }
 
